@@ -5,7 +5,7 @@
  * API Key required for all data endpoints
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://functioning-suggestion-love-sing.trycloudflare.com/api";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://portions-carey-translator-black.trycloudflare.com/api";
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "dQzfTjbgGB_R-aYFPcrZBj-Jf63ZmW2vSl8_xplNck0";
 
 // Toggle between mock and real API
