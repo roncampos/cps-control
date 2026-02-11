@@ -7,13 +7,15 @@ import Link from "next/link";
 interface Rock {
   id: string;
   title: string;
-  owner: string;
-  status: "on_track" | "off_track" | "at_risk" | "complete" | "dropped";
-  progress: number;
-  quarter: string;
-  successCriteria?: Array<{ description: string; complete: boolean }>;
-  blockers?: string | null;
-  weeklyUpdates?: Array<{ week: string; update: string }>;
+  owners: string[];
+  status: string; // "Doing", "To Do", "Done", etc.
+  on_track: string; // "On Track", "Off Track", "At Risk"
+  teams: string[];
+  due_date: string | null;
+  notion_url: string;
+  last_edited: string;
+  sub_rocks?: Rock[];
+  parent_id?: string | null;
 }
 
 export default function RocksPage() {
@@ -27,7 +29,9 @@ export default function RocksPage() {
       try {
         setLoading(true);
         const data = await getRocks(quarter);
-        setRocks(Array.isArray(data) ? data : data.rocks || []);
+        // Flatten rocks to include only top-level (no parent_id)
+        const topLevel = (data.rocks || []).filter((r: Rock) => !r.parent_id);
+        setRocks(topLevel);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load rocks");
       } finally {
@@ -66,10 +70,10 @@ export default function RocksPage() {
     );
   }
 
-  const onTrack = rocks.filter((r) => r.status === "on_track").length;
-  const offTrack = rocks.filter((r) => r.status === "off_track").length;
-  const atRisk = rocks.filter((r) => r.status === "at_risk").length;
-  const complete = rocks.filter((r) => r.status === "complete").length;
+  const onTrack = rocks.filter((r) => r.on_track === "On Track").length;
+  const offTrack = rocks.filter((r) => r.on_track === "Off Track").length;
+  const atRisk = rocks.filter((r) => r.on_track === "At Risk").length;
+  const complete = rocks.filter((r) => r.status === "Done").length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -170,40 +174,28 @@ function StatCard({ label, value, color }: { label: string; value: number; color
 }
 
 function RockCard({ rock }: { rock: Rock }) {
-  const statusConfig = {
-    on_track: {
+  const statusConfig: Record<string, {bg: string; text: string; border: string}> = {
+    "On Track": {
       bg: "bg-green-100",
       text: "text-green-800",
       border: "border-green-200",
-      label: "ON TRACK",
     },
-    off_track: {
+    "Off Track": {
       bg: "bg-red-100",
       text: "text-red-800",
       border: "border-red-200",
-      label: "OFF TRACK",
     },
-    at_risk: {
+    "At Risk": {
       bg: "bg-yellow-100",
       text: "text-yellow-800",
       border: "border-yellow-200",
-      label: "AT RISK",
-    },
-    complete: {
-      bg: "bg-blue-100",
-      text: "text-blue-800",
-      border: "border-blue-200",
-      label: "COMPLETE",
-    },
-    dropped: {
-      bg: "bg-gray-100",
-      text: "text-gray-800",
-      border: "border-gray-200",
-      label: "DROPPED",
     },
   };
 
-  const config = statusConfig[rock.status];
+  const config = statusConfig[rock.on_track] || statusConfig["On Track"];
+  const completedSubRocks = rock.sub_rocks?.filter(sr => sr.status === "Done").length || 0;
+  const totalSubRocks = rock.sub_rocks?.length || 0;
+  const progress = totalSubRocks > 0 ? Math.round((completedSubRocks / totalSubRocks) * 100) : 0;
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
@@ -215,83 +207,101 @@ function RockCard({ rock }: { rock: Rock }) {
         <span
           className={`px-3 py-1 text-xs font-medium rounded border ${config.bg} ${config.text} ${config.border} whitespace-nowrap`}
         >
-          {config.label}
+          {rock.on_track.toUpperCase()}
         </span>
       </div>
 
-      {/* Progress Bar */}
+      {/* Status Badge */}
       <div className="mb-4">
-        <div className="flex items-center justify-between text-sm mb-2">
-          <span className="text-gray-600">Progress</span>
-          <span className="font-medium text-gray-900">{rock.progress}%</span>
+        <span className="inline-block px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded">
+          {rock.status}
+        </span>
+      </div>
+
+      {/* Progress from Sub-Rocks */}
+      {totalSubRocks > 0 && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between text-sm mb-2">
+            <span className="text-gray-600">Sub-tasks</span>
+            <span className="font-medium text-gray-900">{completedSubRocks}/{totalSubRocks} ({progress}%)</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-3">
+            <div
+              className={`h-3 rounded-full transition-all ${
+                progress >= 100
+                  ? "bg-blue-600"
+                  : rock.on_track === "On Track"
+                  ? "bg-green-600"
+                  : rock.on_track === "At Risk"
+                  ? "bg-yellow-500"
+                  : "bg-red-500"
+              }`}
+              style={{ width: `${Math.min(progress, 100)}%` }}
+            ></div>
+          </div>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-3">
-          <div
-            className={`h-3 rounded-full transition-all ${
-              rock.progress >= 100
-                ? "bg-blue-600"
-                : rock.status === "on_track"
-                ? "bg-green-600"
-                : rock.status === "at_risk"
-                ? "bg-yellow-500"
-                : "bg-red-500"
-            }`}
-            style={{ width: `${Math.min(rock.progress, 100)}%` }}
-          ></div>
+      )}
+
+      {/* Owners */}
+      <div className="mb-4 flex items-start gap-2 text-sm">
+        <span className="text-gray-500">Owners:</span>
+        <div className="flex flex-wrap gap-1">
+          {rock.owners.map((owner, idx) => (
+            <span key={idx} className="font-medium text-gray-900">
+              {owner}{idx < rock.owners.length - 1 ? "," : ""}
+            </span>
+          ))}
         </div>
       </div>
 
-      {/* Owner */}
-      <div className="mb-4 flex items-center gap-2 text-sm">
-        <span className="text-gray-500">Owner:</span>
-        <span className="font-medium text-gray-900">{rock.owner}</span>
-      </div>
-
-      {/* Success Criteria */}
-      {rock.successCriteria && rock.successCriteria.length > 0 && (
+      {/* Sub-Rocks */}
+      {rock.sub_rocks && rock.sub_rocks.length > 0 && (
         <div className="mb-4">
           <p className="text-xs font-medium text-gray-500 uppercase mb-2">
-            Success Criteria
+            Sub-tasks
           </p>
           <div className="space-y-2">
-            {rock.successCriteria.map((criterion, idx) => (
+            {rock.sub_rocks.map((subRock, idx) => (
               <div key={idx} className="flex items-start gap-2 text-sm">
                 <input
                   type="checkbox"
-                  checked={criterion.complete}
+                  checked={subRock.status === "Done"}
                   disabled
                   className="mt-0.5 flex-shrink-0"
                 />
-                <span
-                  className={
-                    criterion.complete
-                      ? "line-through text-gray-400"
-                      : "text-gray-700"
-                  }
-                >
-                  {criterion.description}
-                </span>
+                <div className="flex-1">
+                  <span
+                    className={
+                      subRock.status === "Done"
+                        ? "line-through text-gray-400"
+                        : "text-gray-700"
+                    }
+                  >
+                    {subRock.title}
+                  </span>
+                  {subRock.on_track === "Off Track" && (
+                    <span className="ml-2 text-xs text-red-600">⚠ Off Track</span>
+                  )}
+                </div>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Blockers */}
-      {rock.blockers && (
+      {/* Teams */}
+      {rock.teams && rock.teams.length > 0 && (
         <div className="pt-4 border-t border-gray-200">
-          <p className="text-xs font-medium text-red-600 mb-1">⚠️ BLOCKER</p>
-          <p className="text-sm text-gray-700">{rock.blockers}</p>
-        </div>
-      )}
-
-      {/* Latest Update */}
-      {rock.weeklyUpdates && rock.weeklyUpdates.length > 0 && (
-        <div className="pt-4 border-t border-gray-200 mt-4">
-          <p className="text-xs font-medium text-gray-500 uppercase mb-1">
-            Latest Update ({rock.weeklyUpdates[0].week})
-          </p>
-          <p className="text-sm text-gray-700">{rock.weeklyUpdates[0].update}</p>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-gray-500">Teams:</span>
+            <div className="flex gap-2">
+              {rock.teams.map((team, idx) => (
+                <span key={idx} className="px-2 py-1 text-xs bg-blue-50 text-blue-700 rounded">
+                  {team}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>

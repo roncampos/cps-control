@@ -7,27 +7,25 @@ import Link from "next/link";
 interface Issue {
   id: string;
   title: string;
-  priority: "critical" | "high" | "medium" | "low";
-  category: string;
-  raisedBy: string;
-  date: string;
-  context: string;
-  impact: string;
-  nextStep: string;
-  status: "open" | "solved";
+  status: string; // "Solved", "Open", etc.
+  owners: string[];
+  meeting: string | null;
+  date_added: string | null;
+  notion_url: string;
+  last_edited: string;
 }
 
 export default function IssuesPage() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"open" | "solved">("open");
+  const [showSolved, setShowSolved] = useState(false);
 
   useEffect(() => {
     async function loadIssues() {
       try {
         setLoading(true);
-        const data = await getIssues(statusFilter);
+        const data = await getIssues();
         setIssues(Array.isArray(data) ? data : data.issues || []);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load issues");
@@ -37,7 +35,7 @@ export default function IssuesPage() {
     }
 
     loadIssues();
-  }, [statusFilter]);
+  }, []);
 
   if (loading) {
     return (
@@ -67,11 +65,13 @@ export default function IssuesPage() {
     );
   }
 
-  // Group by priority
-  const critical = issues.filter((i) => i.priority === "critical");
-  const high = issues.filter((i) => i.priority === "high");
-  const medium = issues.filter((i) => i.priority === "medium");
-  const low = issues.filter((i) => i.priority === "low");
+  // Filter by solved status
+  const filteredIssues = issues.filter((i) => 
+    showSolved ? i.status === "Solved" : i.status !== "Solved"
+  );
+  
+  const openCount = issues.filter(i => i.status !== "Solved").length;
+  const solvedCount = issues.filter(i => i.status === "Solved").length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -89,67 +89,40 @@ export default function IssuesPage() {
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => setStatusFilter("open")}
+                onClick={() => setShowSolved(false)}
                 className={`px-4 py-2 text-sm font-medium rounded-md ${
-                  statusFilter === "open"
+                  !showSolved
                     ? "bg-blue-600 text-white"
                     : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
                 }`}
               >
-                Open ({issues.filter((i) => i.status === "open").length})
+                Open ({openCount})
               </button>
               <button
-                onClick={() => setStatusFilter("solved")}
+                onClick={() => setShowSolved(true)}
                 className={`px-4 py-2 text-sm font-medium rounded-md ${
-                  statusFilter === "solved"
+                  showSolved
                     ? "bg-blue-600 text-white"
                     : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
                 }`}
               >
-                Solved
+                Solved ({solvedCount})
               </button>
             </div>
           </div>
-
-          {/* Summary Stats */}
-          {statusFilter === "open" && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <StatCard label="Critical" value={critical.length} color="text-red-600" />
-              <StatCard label="High" value={high.length} color="text-orange-600" />
-              <StatCard label="Medium" value={medium.length} color="text-yellow-600" />
-              <StatCard label="Low" value={low.length} color="text-blue-600" />
-            </div>
-          )}
         </div>
 
         {/* Issues List */}
-        <div className="space-y-8">
-          {statusFilter === "open" && (
-            <>
-              {critical.length > 0 && (
-                <PrioritySection title="🚨 Critical" issues={critical} color="red" />
-              )}
-              {high.length > 0 && (
-                <PrioritySection title="🔴 High Priority" issues={high} color="orange" />
-              )}
-              {medium.length > 0 && (
-                <PrioritySection title="🟡 Medium Priority" issues={medium} color="yellow" />
-              )}
-              {low.length > 0 && (
-                <PrioritySection title="🔵 Low Priority" issues={low} color="blue" />
-              )}
-            </>
-          )}
-
-          {statusFilter === "solved" && issues.length > 0 && (
-            <PrioritySection title="✅ Solved Issues" issues={issues} color="green" />
-          )}
+        <div className="space-y-3">
+          {filteredIssues.map((issue) => (
+            <IssueCard key={issue.id} issue={issue} />
+          ))}
         </div>
 
-        {issues.length === 0 && (
+        {filteredIssues.length === 0 && (
           <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
             <p className="text-gray-500">
-              {statusFilter === "open" 
+              {!showSolved 
                 ? "No open issues — you're crushing it! 🎉" 
                 : "No solved issues yet"}
             </p>
@@ -160,93 +133,66 @@ export default function IssuesPage() {
   );
 }
 
-function PrioritySection({
-  title,
-  issues,
-  color,
-}: {
-  title: string;
-  issues: Issue[];
-  color: string;
-}) {
-  const borderColors = {
-    red: "border-l-red-600",
-    orange: "border-l-orange-500",
-    yellow: "border-l-yellow-500",
-    blue: "border-l-blue-500",
-    green: "border-l-green-500",
-  };
-
-  return (
-    <div>
-      <h2 className="text-lg font-semibold text-gray-900 mb-4">{title}</h2>
-      <div className="space-y-3">
-        {issues.map((issue) => (
-          <IssueCard
-            key={issue.id}
-            issue={issue}
-            borderColor={borderColors[color as keyof typeof borderColors]}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function IssueCard({ issue, borderColor }: { issue: Issue; borderColor: string }) {
+function IssueCard({ issue }: { issue: Issue }) {
+  const isSolved = issue.status === "Solved";
+  
   return (
     <div
-      className={`bg-white rounded-lg border border-gray-200 border-l-4 p-6 hover:shadow-md transition-shadow ${borderColor}`}
+      className={`bg-white rounded-lg border border-gray-200 border-l-4 p-6 hover:shadow-md transition-shadow ${
+        isSolved ? "border-l-green-500" : "border-l-blue-500"
+      }`}
     >
       {/* Header */}
-      <div className="flex items-start justify-between mb-4">
+      <div className="flex items-start justify-between">
         <div className="flex-1">
-          <h3 className="font-semibold text-gray-900 text-base mb-2">
+          <h4 className="font-medium text-gray-900 text-base mb-2">
             {issue.title}
-          </h3>
+          </h4>
           <div className="flex items-center gap-4 text-xs text-gray-500">
-            <span className="capitalize">
-              <span className="font-medium">Category:</span> {issue.category}
-            </span>
-            <span>
-              <span className="font-medium">Raised by:</span> {issue.raisedBy}
-            </span>
-            <span>
-              <span className="font-medium">Date:</span> {issue.date}
-            </span>
+            {issue.owners && issue.owners.length > 0 && (
+              <span>
+                <span className="font-medium">Owners:</span> {issue.owners.join(", ")}
+              </span>
+            )}
+            {issue.date_added && (
+              <span>
+                <span className="font-medium">Added:</span>{" "}
+                {new Date(issue.date_added).toLocaleDateString()}
+              </span>
+            )}
+            {issue.meeting && (
+              <span className="font-medium">Meeting: {issue.meeting}</span>
+            )}
           </div>
         </div>
-        <span className="text-xs font-bold uppercase text-gray-500 bg-gray-100 px-3 py-1 rounded">
-          {issue.priority}
-        </span>
+        <div className="flex flex-col items-end gap-2">
+          <span
+            className={`text-xs font-bold uppercase px-3 py-1 rounded ${
+              isSolved
+                ? "bg-green-100 text-green-800"
+                : "bg-blue-100 text-blue-800"
+            }`}
+          >
+            {issue.status}
+          </span>
+          <a
+            href={issue.notion_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-600 hover:text-blue-800"
+          >
+            View in Notion →
+          </a>
+        </div>
       </div>
-
-      {/* Context */}
-      <div className="mb-3">
-        <p className="text-xs font-medium text-gray-500 uppercase mb-1">Context</p>
-        <p className="text-sm text-gray-700">{issue.context}</p>
-      </div>
-
-      {/* Impact */}
-      <div className="mb-3">
-        <p className="text-xs font-medium text-gray-500 uppercase mb-1">Impact</p>
-        <p className="text-sm text-gray-700">{issue.impact}</p>
-      </div>
-
-      {/* Next Step */}
-      <div className="pt-3 border-t border-gray-200">
-        <p className="text-xs font-medium text-blue-600 uppercase mb-1">Next Step</p>
-        <p className="text-sm font-medium text-gray-900">{issue.nextStep}</p>
-      </div>
-    </div>
-  );
-}
-
-function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <p className="text-xs text-gray-500 mb-1">{label}</p>
-      <p className={`text-2xl font-bold ${color}`}>{value}</p>
+      
+      {issue.last_edited && (
+        <div className="mt-3 pt-3 border-t border-gray-200">
+          <p className="text-xs text-gray-500">
+            Last edited: {new Date(issue.last_edited).toLocaleString()}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
