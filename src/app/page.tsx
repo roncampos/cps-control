@@ -149,8 +149,8 @@ export default function Dashboard() {
             Q1 2026 Rocks
           </h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {summary.rocks.data.map((rock) => (
-              <RockCard key={rock._id} rock={rock} />
+            {summary.rocks.data.map((rock: any) => (
+              <RockCard key={rock.id} rock={rock} />
             ))}
           </div>
         </section>
@@ -185,8 +185,8 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {summary.scorecard.data.map((metric) => (
-                  <tr key={metric._id}>
+                {summary.scorecard.data.map((metric: any, idx: number) => (
+                  <tr key={idx}>
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">
                       {metric.metric}
                     </td>
@@ -218,8 +218,8 @@ export default function Dashboard() {
             Open Issues
           </h2>
           <div className="space-y-3">
-            {summary.issues.data.map((issue) => (
-              <IssueCard key={issue._id} issue={issue} />
+            {summary.issues.data.map((issue: any, idx: number) => (
+              <IssueCard key={idx} issue={issue} />
             ))}
           </div>
         </section>
@@ -230,8 +230,8 @@ export default function Dashboard() {
             Accountability Chart
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {summary.team.data.map((role) => (
-              <TeamCard key={role._id} role={role} />
+            {summary.team.data.map((role: any, idx: number) => (
+              <TeamCard key={idx} role={role} />
             ))}
           </div>
         </section>
