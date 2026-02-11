@@ -64,7 +64,7 @@ export const getIssuesByStatus = query({
   handler: async (ctx, args) => {
     return await ctx.db
       .query("issues")
-      .withIndex("by_status", (q) => q.eq("status", args.status))
+      .withIndex("by_status", (q) => q.eq("status", args.status as any))
       .collect();
   },
 });
