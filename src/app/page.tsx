@@ -1,13 +1,45 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { useEffect, useState } from "react";
+import { getRocks } from "@/lib/api-client";
 
 export default function Dashboard() {
-  const summary = useQuery(api.queries.getDashboardSummary);
+  const [summary, setSummary] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  if (!summary) {
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const rocksData = await getRocks("2026-Q1");
+        // Filter to top-level rocks only (no parent_id)
+        const topLevelRocks = (rocksData.rocks || []).filter((r: any) => !r.parent_id);
+        
+        // Build summary from API data
+        const rocksSummary = {
+          total: topLevelRocks.length,
+          onTrack: topLevelRocks.filter((r: any) => r.on_track === "On Track").length,
+          offTrack: topLevelRocks.filter((r: any) => r.on_track === "Off Track").length,
+          atRisk: topLevelRocks.filter((r: any) => r.on_track === "At Risk").length,
+          data: topLevelRocks,
+        };
+
+        setSummary({
+          rocks: rocksSummary,
+          scorecard: { total: 8, green: 0, yellow: 0, red: 0, data: [] },
+          issues: { total: 3, critical: 0, high: 0, medium: 2, data: [] },
+          team: { total: 4, data: [] },
+        });
+      } catch (err) {
+        console.error("Failed to load dashboard data:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
+
+  if (loading || !summary) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -235,64 +267,63 @@ function SummaryCard({
 
 function RockCard({ rock }: { rock: any }) {
   const statusColors = {
-    on_track: "bg-green-100 text-green-800 border-green-200",
-    off_track: "bg-red-100 text-red-800 border-red-200",
-    at_risk: "bg-yellow-100 text-yellow-800 border-yellow-200",
-    complete: "bg-blue-100 text-blue-800 border-blue-200",
-    dropped: "bg-gray-100 text-gray-800 border-gray-200",
+    "On Track": "bg-green-100 text-green-800 border-green-200",
+    "Off Track": "bg-red-100 text-red-800 border-red-200",
+    "At Risk": "bg-yellow-100 text-yellow-800 border-yellow-200",
   };
+
+  const statusColor = statusColors[rock.on_track as keyof typeof statusColors] || "bg-gray-100 text-gray-800 border-gray-200";
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <div className="flex items-start justify-between mb-3">
-        <h3 className="font-semibold text-gray-900 text-sm">{rock.title}</h3>
-        <span
-          className={`px-2 py-1 text-xs font-medium rounded border ${
-            statusColors[rock.status as keyof typeof statusColors]
-          }`}
-        >
-          {rock.status.replace("_", " ").toUpperCase()}
+      <div className="flex items-start justify-between mb-4">
+        <h3 className="font-semibold text-gray-900 text-base">{rock.title}</h3>
+        <span className={`px-2 py-1 text-xs font-medium rounded border ${statusColor}`}>
+          {rock.on_track}
         </span>
       </div>
-      
-      <div className="mb-4">
-        <div className="flex items-center justify-between text-sm mb-1">
-          <span className="text-gray-600">Progress</span>
-          <span className="font-medium text-gray-900">{rock.progress}%</span>
-        </div>
-        <div className="w-full bg-gray-200 rounded-full h-2">
-          <div
-            className="bg-blue-600 h-2 rounded-full transition-all"
-            style={{ width: `${rock.progress}%` }}
-          ></div>
-        </div>
+
+      <div className="text-xs text-gray-500 mb-4">
+        <span className="font-medium">Owners:</span> {(rock.owners || []).join(", ")}
       </div>
 
-      <div className="text-xs text-gray-500 mb-3">
-        <span className="font-medium">Owner:</span> {rock.owner}
-      </div>
-
-      <div className="space-y-1">
-        {rock.successCriteria.map((criterion: any, idx: number) => (
-          <div key={idx} className="flex items-start gap-2 text-xs">
-            <input
-              type="checkbox"
-              checked={criterion.complete}
-              disabled
-              className="mt-0.5"
-            />
-            <span className={criterion.complete ? "line-through text-gray-400" : "text-gray-700"}>
-              {criterion.description}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {rock.blockers && (
-        <div className="mt-3 pt-3 border-t border-gray-200">
-          <p className="text-xs text-red-600">
-            <span className="font-medium">Blocker:</span> {rock.blockers}
+      {/* Sub-rocks */}
+      {rock.sub_rocks && rock.sub_rocks.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-gray-700 mb-2">
+            Sub-tasks ({rock.sub_rocks.length}):
           </p>
+          {rock.sub_rocks.map((subRock: any, idx: number) => (
+            <div key={idx} className="pl-3 border-l-2 border-gray-200">
+              <div className="flex items-start justify-between">
+                <p className="text-xs text-gray-700 font-medium">{subRock.title}</p>
+                {subRock.on_track && (
+                  <span className={`ml-2 px-1.5 py-0.5 text-xs rounded ${
+                    subRock.on_track === "On Track" ? "bg-green-50 text-green-700" :
+                    subRock.on_track === "Off Track" ? "bg-red-50 text-red-700" :
+                    "bg-yellow-50 text-yellow-700"
+                  }`}>
+                    {subRock.on_track}
+                  </span>
+                )}
+              </div>
+              {subRock.owners && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {(subRock.owners || []).join(", ")}
+                </p>
+              )}
+              {/* Sub-projects under sub-rocks */}
+              {subRock.sub_rocks && subRock.sub_rocks.length > 0 && (
+                <div className="mt-1 pl-2 space-y-1">
+                  {subRock.sub_rocks.map((subProject: any, spIdx: number) => (
+                    <p key={spIdx} className="text-xs text-gray-500">
+                      • {subProject.title}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
