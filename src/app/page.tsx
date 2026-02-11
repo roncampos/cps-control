@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 
@@ -24,25 +25,43 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">CPS Control</h1>
-              <p className="text-sm text-gray-500">
-                Campos Property Solutions Operating System
+              <h1 className="text-xl font-bold text-gray-900">CPS Control</h1>
+              <p className="text-xs text-gray-500">
+                Campos Property Solutions
               </p>
             </div>
             <div className="flex items-center gap-4">
-              <nav className="flex gap-4">
-                <a
+              <nav className="flex gap-3">
+                <Link
                   href="/"
                   className="px-3 py-2 text-sm font-medium text-gray-900 bg-gray-100 rounded-md"
                 >
                   Dashboard
-                </a>
-                <a
+                </Link>
+                <Link
+                  href="/rocks"
+                  className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md"
+                >
+                  Rocks
+                </Link>
+                <Link
+                  href="/scorecard"
+                  className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md"
+                >
+                  Scorecard
+                </Link>
+                <Link
+                  href="/issues"
+                  className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md"
+                >
+                  Issues
+                </Link>
+                <Link
                   href="/finance"
                   className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md"
                 >
                   Finance
-                </a>
+                </Link>
               </nav>
               <div className="text-right border-l border-gray-200 pl-4">
                 <p className="text-sm font-medium text-gray-900">Q1 2026</p>

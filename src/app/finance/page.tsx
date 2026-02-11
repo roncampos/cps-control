@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   getCashPosition,
   getRunRate,
@@ -52,30 +53,7 @@ export default function FinancePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Financial Dashboard</h1>
-              <p className="text-sm text-gray-500">
-                QuickBooks data via cps-documentation API
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {qbHealth?.status === "healthy" ? (
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                  ✓ QuickBooks Connected
-                </span>
-              ) : (
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                  ✗ QuickBooks Error
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
+      <Header currentPage="finance" qbHealth={qbHealth} />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Summary Cards */}
@@ -224,5 +202,57 @@ export default function FinancePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function Header({ currentPage, qbHealth }: { currentPage: string; qbHealth?: any }) {
+  return (
+    <header className="bg-white border-b border-gray-200">
+      <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">CPS Control</h1>
+            <p className="text-xs text-gray-500">Campos Property Solutions</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <nav className="flex gap-3">
+              <NavLink href="/" label="Dashboard" active={currentPage === "dashboard"} />
+              <NavLink href="/rocks" label="Rocks" active={currentPage === "rocks"} />
+              <NavLink href="/scorecard" label="Scorecard" active={currentPage === "scorecard"} />
+              <NavLink href="/issues" label="Issues" active={currentPage === "issues"} />
+              <NavLink href="/finance" label="Finance" active={currentPage === "finance"} />
+            </nav>
+            {qbHealth && (
+              <div className="border-l border-gray-200 pl-4">
+                {qbHealth.status === "healthy" ? (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    ✓ QB Connected
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                    ✗ QB Error
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function NavLink({ href, label, active }: { href: string; label: string; active: boolean }) {
+  return (
+    <Link
+      href={href}
+      className={`px-3 py-2 text-sm font-medium rounded-md ${
+        active
+          ? "text-gray-900 bg-gray-100"
+          : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+      }`}
+    >
+      {label}
+    </Link>
   );
 }

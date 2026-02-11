@@ -139,71 +139,132 @@ export async function searchDocumentation(query: string, limit: number = 5) {
 }
 
 // ==========================================
-// NOTION API (Phase 18B - Not Yet Built)
+// NOTION API (Phase 18B - LIVE!)
 // ==========================================
 
 export async function getRocks(quarter: string = "2026-Q1") {
-  // Mock only for now - Phase 18B will build this
-  return [
-    {
-      id: "1",
-      title: "New Marketing Flow Implementation",
-      owner: "Ron",
-      status: "on_track" as const,
-      progress: 60,
-      quarter,
-    },
-    {
-      id: "2",
-      title: "JC Integrator Transition",
-      owner: "Ron",
-      status: "on_track" as const,
-      progress: 45,
-      quarter,
-    },
-    {
-      id: "3",
-      title: "Social Media Consistency",
-      owner: "Ron",
-      status: "off_track" as const,
-      progress: 20,
-      quarter,
-    },
-  ];
+  if (USE_MOCK) {
+    return [
+      {
+        id: "1",
+        title: "New Marketing Flow Implementation",
+        owner: "Ron",
+        status: "on_track" as const,
+        progress: 60,
+        quarter,
+      },
+      {
+        id: "2",
+        title: "JC Integrator Transition",
+        owner: "Ron",
+        status: "on_track" as const,
+        progress: 45,
+        quarter,
+      },
+      {
+        id: "3",
+        title: "Social Media Consistency",
+        owner: "Ron",
+        status: "off_track" as const,
+        progress: 20,
+        quarter,
+      },
+    ];
+  }
+
+  const res = await fetch(`${API_BASE_URL}/notion/rocks?quarter=${quarter}`);
+  if (!res.ok) throw new Error("Failed to fetch rocks");
+  return res.json();
 }
 
 export async function updateRockProgress(id: string, progress: number, notes: string) {
-  // Mock only - Phase 18B will build this
-  console.log("Mock: Updating rock", id, "to", progress, "%", notes);
-  return { success: true };
+  // Write endpoint not yet built - Phase 18C
+  console.log("TODO: Update rock", id, "to", progress, "%", notes);
+  return { success: false, message: "Write endpoints coming in Phase 18C" };
 }
 
-export async function getScorecardMetrics(week: string = "2026-W06") {
-  // Mock only - Phase 18B will build this
-  return [
-    {
-      metric: "Contracts Signed",
-      department: "acquisitions",
-      owner: "Joey",
-      target: 2,
-      actual: null,
-      status: "pending" as const,
-      week,
-    },
-    {
-      metric: "Offers Made",
-      department: "acquisitions",
-      owner: "Joey",
-      target: 15,
-      actual: null,
-      status: "pending" as const,
-      week,
-    },
-  ];
+export async function getScorecardMetrics(week?: string) {
+  if (USE_MOCK) {
+    return {
+      metrics: [
+        {
+          metric: "Contracts Signed",
+          department: "acquisitions",
+          owner: "Joey",
+          target: 2,
+          actual: null,
+          trend: "→",
+          notes: null,
+        },
+        {
+          metric: "Offers Made",
+          department: "acquisitions",
+          owner: "Joey",
+          target: 15,
+          actual: null,
+          trend: "→",
+          notes: null,
+        },
+      ],
+      thresholds: {
+        green: ">= 90% of target",
+        yellow: "70-89% of target",
+        red: "< 70% of target",
+      },
+    };
+  }
+
+  const url = week 
+    ? `${API_BASE_URL}/notion/scorecard?week=${week}`
+    : `${API_BASE_URL}/notion/scorecard`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Failed to fetch scorecard");
+  return res.json();
 }
 
 export async function updateScorecardActual(metric: string, week: string, actual: number) {
-  // Mock only - Phase 18B will build this
-  console.log("Mock: Updating scorecard", metric, "for", week, "to", actual);
-  return { success: true };
+  // Write endpoint not yet built - Phase 18C
+  console.log("TODO: Update scorecard", metric, "for", week, "to", actual);
+  return { success: false, message: "Write endpoints coming in Phase 18C" };
+}
+
+export async function getIssues(status: "open" | "solved" = "open") {
+  if (USE_MOCK) {
+    return [
+      {
+        id: "1",
+        title: "Marketing flow bottleneck",
+        priority: "critical",
+        category: "process",
+        raisedBy: "Ron",
+        date: "2026-02-10",
+        context: "New flow taking too long to implement",
+        impact: "Delays Q1 rock",
+        nextStep: "Break into smaller chunks",
+        status: "open",
+      },
+    ];
+  }
+
+  const res = await fetch(`${API_BASE_URL}/notion/issues?status=${status}`);
+  if (!res.ok) throw new Error("Failed to fetch issues");
+  return res.json();
+}
+
+export async function getGoals() {
+  if (USE_MOCK) {
+    return [
+      {
+        goal: "Reach $50K MRR",
+        category: "financial",
+        target: "50000",
+        deadline: "2026-12-31",
+        progress: 37,
+      },
+    ];
+  }
+
+  const res = await fetch(`${API_BASE_URL}/notion/goals`);
+  if (!res.ok) throw new Error("Failed to fetch goals");
+  return res.json();
 }
