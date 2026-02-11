@@ -5,7 +5,7 @@
  * API Key required for all data endpoints
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://ana-rick-rays-immunology.trycloudflare.com/api";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://programmers-dvd-prairie-picked.trycloudflare.com/api";
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "dQzfTjbgGB_R-aYFPcrZBj-Jf63ZmW2vSl8_xplNck0";
 
 // Note: Will switch to https://api.cpscontrol.ai/api once DNS propagates
