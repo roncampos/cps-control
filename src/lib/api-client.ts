@@ -5,7 +5,7 @@
  * Target: http://localhost:8000/api/*
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://cps-documentation.onrender.com/api";
 
 // Toggle between mock and real API
 const USE_MOCK = false; // ✅ Phase 18A complete - using real API!
