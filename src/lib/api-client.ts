@@ -1,14 +1,23 @@
 /**
  * API Client for cps-documentation HTTP API
  * 
- * Current: Mock data (Phase 18A in progress)
- * Target: http://localhost:8000/api/*
+ * Connected via Cloudflare Tunnel (Phase 18B)
+ * API Key required for all data endpoints
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://cps-documentation.onrender.com/api";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://functioning-suggestion-love-sing.trycloudflare.com/api";
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "dQzfTjbgGB_R-aYFPcrZBj-Jf63ZmW2vSl8_xplNck0";
 
 // Toggle between mock and real API
-const USE_MOCK = false; // ✅ Phase 18A complete - using real API!
+const USE_MOCK = false; // ✅ Phase 18B complete - using real API via Cloudflare Tunnel!
+
+// Helper to add auth header
+function getHeaders() {
+  return {
+    "X-API-Key": API_KEY,
+    "Content-Type": "application/json",
+  };
+}
 
 // ==========================================
 // QUICKBOOKS API
@@ -26,7 +35,9 @@ export async function getCashPosition() {
     };
   }
 
-  const res = await fetch(`${API_BASE_URL}/quickbooks/cash-position`);
+  const res = await fetch(`${API_BASE_URL}/quickbooks/cash-position`, {
+    headers: getHeaders(),
+  });
   if (!res.ok) throw new Error("Failed to fetch cash position");
   return res.json();
 }
@@ -42,7 +53,9 @@ export async function getRunRate(months: number = 3) {
     };
   }
 
-  const res = await fetch(`${API_BASE_URL}/quickbooks/run-rate?months=${months}`);
+  const res = await fetch(`${API_BASE_URL}/quickbooks/run-rate?months=${months}`, {
+    headers: getHeaders(),
+  });
   if (!res.ok) throw new Error("Failed to fetch run rate");
   return res.json();
 }
@@ -60,7 +73,9 @@ export async function getHiringAnalysis(salary: number) {
     };
   }
 
-  const res = await fetch(`${API_BASE_URL}/quickbooks/hiring-analysis?salary=${salary}`);
+  const res = await fetch(`${API_BASE_URL}/quickbooks/hiring-analysis?salary=${salary}`, {
+    headers: getHeaders(),
+  });
   if (!res.ok) throw new Error("Failed to fetch hiring analysis");
   return res.json();
 }
@@ -91,7 +106,9 @@ export async function getPropertyRankings() {
     };
   }
 
-  const res = await fetch(`${API_BASE_URL}/quickbooks/property-rankings`);
+  const res = await fetch(`${API_BASE_URL}/quickbooks/property-rankings`, {
+    headers: getHeaders(),
+  });
   if (!res.ok) throw new Error("Failed to fetch property rankings");
   return res.json();
 }
@@ -106,7 +123,9 @@ export async function getQuickBooksHealth() {
     };
   }
 
-  const res = await fetch(`${API_BASE_URL}/quickbooks/health`);
+  const res = await fetch(`${API_BASE_URL}/quickbooks/health`, {
+    headers: getHeaders(),
+  });
   if (!res.ok) throw new Error("Failed to fetch QB health");
   return res.json();
 }
@@ -133,7 +152,9 @@ export async function searchDocumentation(query: string, limit: number = 5) {
     };
   }
 
-  const res = await fetch(`${API_BASE_URL}/rag/search?query=${encodeURIComponent(query)}&limit=${limit}`);
+  const res = await fetch(`${API_BASE_URL}/rag/search?query=${encodeURIComponent(query)}&limit=${limit}`, {
+    headers: getHeaders(),
+  });
   if (!res.ok) throw new Error("Failed to search documentation");
   return res.json();
 }
@@ -172,7 +193,9 @@ export async function getRocks(quarter: string = "2026-Q1") {
     ];
   }
 
-  const res = await fetch(`${API_BASE_URL}/notion/rocks?quarter=${quarter}`);
+  const res = await fetch(`${API_BASE_URL}/notion/rocks?quarter=${quarter}`, {
+    headers: getHeaders(),
+  });
   if (!res.ok) throw new Error("Failed to fetch rocks");
   return res.json();
 }
@@ -217,7 +240,9 @@ export async function getScorecardMetrics(week?: string) {
   const url = week 
     ? `${API_BASE_URL}/notion/scorecard?week=${week}`
     : `${API_BASE_URL}/notion/scorecard`;
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    headers: getHeaders(),
+  });
   if (!res.ok) throw new Error("Failed to fetch scorecard");
   return res.json();
 }
@@ -246,7 +271,9 @@ export async function getIssues(status: "open" | "solved" = "open") {
     ];
   }
 
-  const res = await fetch(`${API_BASE_URL}/notion/issues?status=${status}`);
+  const res = await fetch(`${API_BASE_URL}/notion/issues?status=${status}`, {
+    headers: getHeaders(),
+  });
   if (!res.ok) throw new Error("Failed to fetch issues");
   return res.json();
 }
@@ -264,7 +291,9 @@ export async function getGoals() {
     ];
   }
 
-  const res = await fetch(`${API_BASE_URL}/notion/goals`);
+  const res = await fetch(`${API_BASE_URL}/notion/goals`, {
+    headers: getHeaders(),
+  });
   if (!res.ok) throw new Error("Failed to fetch goals");
   return res.json();
 }
