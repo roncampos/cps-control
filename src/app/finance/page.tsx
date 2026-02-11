@@ -62,10 +62,10 @@ export default function FinancePage() {
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <h3 className="text-sm font-medium text-gray-500 mb-2">Total Cash</h3>
             <p className="text-3xl font-bold text-gray-900">
-              ${cashPosition?.totalCash?.toLocaleString() ?? "—"}
+              ${cashPosition?.total_cash?.toLocaleString() ?? "—"}
             </p>
             <div className="mt-4 space-y-2">
-              {cashPosition?.bankAccounts?.map((account: any, idx: number) => (
+              {cashPosition?.accounts?.map((account: any, idx: number) => (
                 <div key={idx} className="flex justify-between text-sm">
                   <span className="text-gray-600">{account.name}</span>
                   <span className="font-medium text-gray-900">
@@ -75,7 +75,7 @@ export default function FinancePage() {
               ))}
             </div>
             <p className="mt-3 text-xs text-gray-400">
-              As of {cashPosition?.asOf ? new Date(cashPosition.asOf).toLocaleDateString() : "—"}
+              As of {cashPosition?.query_timestamp ? new Date(cashPosition.query_timestamp).toLocaleDateString() : "—"}
             </p>
           </div>
 
@@ -83,25 +83,25 @@ export default function FinancePage() {
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <h3 className="text-sm font-medium text-gray-500 mb-2">Monthly Run Rate</h3>
             <p className="text-3xl font-bold text-green-600">
-              ${runRate?.monthlyRevenue?.toLocaleString() ?? "—"}
+              ${runRate?.monthly_revenue?.toLocaleString() ?? "—"}
             </p>
             <div className="mt-4 space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-600">Revenue</span>
                 <span className="font-medium text-green-600">
-                  ${runRate?.monthlyRevenue?.toLocaleString()}
+                  ${runRate?.monthly_revenue?.toLocaleString() ?? "—"}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Expenses</span>
                 <span className="font-medium text-red-600">
-                  ${runRate?.monthlyExpenses?.toLocaleString()}
+                  ${runRate?.monthly_expenses?.toLocaleString() ?? "—"}
                 </span>
               </div>
               <div className="flex justify-between pt-2 border-t border-gray-200">
                 <span className="text-gray-900 font-medium">Net</span>
                 <span className="font-bold text-gray-900">
-                  ${runRate?.netBurnRate?.toLocaleString()}
+                  ${runRate?.net_burn_rate?.toLocaleString() ?? "—"}
                 </span>
               </div>
             </div>
@@ -111,32 +111,32 @@ export default function FinancePage() {
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <h3 className="text-sm font-medium text-gray-500 mb-2">Cash Runway</h3>
             <p className="text-3xl font-bold text-blue-600">
-              {runRate?.runway?.toFixed(1) ?? "—"} <span className="text-lg">months</span>
+              {runRate?.runway_months ? Number(runRate.runway_months).toFixed(1) : "—"} <span className="text-lg">months</span>
             </p>
             <div className="mt-4">
               <div className="w-full bg-gray-200 rounded-full h-3">
                 <div
                   className={`h-3 rounded-full transition-all ${
-                    runRate?.runway > 6
+                    (runRate?.runway_months ?? 0) > 6
                       ? "bg-green-500"
-                      : runRate?.runway > 3
+                      : (runRate?.runway_months ?? 0) > 3
                       ? "bg-yellow-500"
                       : "bg-red-500"
                   }`}
                   style={{
-                    width: `${Math.min((runRate?.runway / 12) * 100, 100)}%`,
+                    width: `${Math.min(((runRate?.runway_months ?? 0) / 12) * 100, 100)}%`,
                   }}
                 ></div>
               </div>
               <p className="mt-2 text-xs text-gray-500">
-                Based on {runRate?.periodAnalyzed}-month average
+                Based on {runRate?.analysis_period_months ?? 3}-month average
               </p>
             </div>
             <div className="mt-4 pt-4 border-t border-gray-200">
               <p className="text-xs text-gray-600">
-                {runRate?.runway > 6
+                {(runRate?.runway_months ?? 0) > 6
                   ? "✓ Healthy runway"
-                  : runRate?.runway > 3
+                  : (runRate?.runway_months ?? 0) > 3
                   ? "⚠ Monitor closely"
                   : "🚨 Critical - need revenue increase"}
               </p>
