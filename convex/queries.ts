@@ -52,7 +52,15 @@ export const getScorecardByDepartment = query({
 // ==========================================
 
 export const getIssuesByStatus = query({
-  args: { status: v.string() },
+  args: { 
+    status: v.union(
+      v.literal("open"),
+      v.literal("identified"),
+      v.literal("discussed"),
+      v.literal("solved"),
+      v.literal("dropped")
+    ) 
+  },
   handler: async (ctx, args) => {
     return await ctx.db
       .query("issues")
