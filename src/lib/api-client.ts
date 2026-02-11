@@ -5,8 +5,10 @@
  * API Key required for all data endpoints
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://portions-carey-translator-black.trycloudflare.com/api";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://ana-rick-rays-immunology.trycloudflare.com/api";
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "dQzfTjbgGB_R-aYFPcrZBj-Jf63ZmW2vSl8_xplNck0";
+
+// Note: Will switch to https://api.cpscontrol.ai/api once DNS propagates
 
 // Toggle between mock and real API
 const USE_MOCK = false; // ✅ Phase 18B complete - using real API via Cloudflare Tunnel!
