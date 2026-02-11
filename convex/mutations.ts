@@ -22,7 +22,7 @@ export const createRock = mutation({
       description: v.string(),
       complete: v.boolean(),
     })),
-    blockers: v.optional(v.union(v.string(), v.null())),
+    blockers: v.optional(v.string()),
     dueDate: v.number(),
     lastUpdated: v.number(),
     weeklyUpdates: v.array(v.object({
@@ -47,7 +47,7 @@ export const createScorecardMetric = mutation({
     department: v.string(),
     owner: v.string(),
     target: v.number(),
-    actual: v.optional(v.union(v.number(), v.null())),
+    actual: v.optional(v.number()),
     week: v.string(),
     status: v.union(
       v.literal("green"),
@@ -55,7 +55,7 @@ export const createScorecardMetric = mutation({
       v.literal("red"),
       v.literal("pending")
     ),
-    notes: v.optional(v.union(v.string(), v.null())),
+    notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("scorecard", args);
@@ -69,9 +69,9 @@ export const createScorecardMetric = mutation({
 export const createIssue = mutation({
   args: {
     title: v.string(),
-    description: v.optional(v.union(v.string(), v.null())),
+    description: v.optional(v.string()),
     raisedBy: v.string(),
-    department: v.optional(v.union(v.string(), v.null())),
+    department: v.optional(v.string()),
     priority: v.union(
       v.literal("critical"),
       v.literal("high"),
@@ -85,11 +85,11 @@ export const createIssue = mutation({
       v.literal("solved"),
       v.literal("dropped")
     ),
-    resolution: v.optional(v.union(v.string(), v.null())),
+    resolution: v.optional(v.string()),
     createdAt: v.number(),
-    resolvedAt: v.optional(v.union(v.number(), v.null())),
-    relatedRockId: v.optional(v.union(v.id("rocks"), v.null())),
-    pattern: v.optional(v.union(v.string(), v.null())),
+    resolvedAt: v.optional(v.number()),
+    relatedRockId: v.optional(v.id("rocks")),
+    pattern: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("issues", args);
@@ -104,17 +104,14 @@ export const createAccountabilityRole = mutation({
   args: {
     role: v.string(),
     person: v.string(),
-    department: v.optional(v.union(v.string(), v.null())),
+    department: v.optional(v.string()),
     responsibilities: v.array(v.string()),
-    reportsTo: v.optional(v.union(v.string(), v.null())),
-    gwoScore: v.optional(v.union(
-      v.object({
-        get: v.boolean(),
-        want: v.boolean(),
-        capacity: v.boolean(),
-      }),
-      v.null()
-    )),
+    reportsTo: v.optional(v.string()),
+    gwoScore: v.optional(v.object({
+      get: v.boolean(),
+      want: v.boolean(),
+      capacity: v.boolean(),
+    })),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("accountabilityChart", args);
@@ -130,8 +127,8 @@ export const logActivity = mutation({
     actor: v.string(),
     action: v.string(),
     description: v.string(),
-    entityType: v.optional(v.union(v.string(), v.null())),
-    entityId: v.optional(v.union(v.string(), v.null())),
+    entityType: v.optional(v.string()),
+    entityId: v.optional(v.string()),
     createdAt: v.number(),
   },
   handler: async (ctx, args) => {
