@@ -296,7 +296,7 @@ function AgentCard({ agent }: { agent: Agent }) {
       <div className="text-xs text-gray-600">
         <span className="font-medium">Capabilities:</span>
         <div className="flex flex-wrap gap-1 mt-1">
-          {agent.capabilities.map((cap) => (
+          {(agent.capabilities || []).map((cap) => (
             <span key={cap} className="px-2 py-0.5 bg-gray-100 rounded">
               {cap}
             </span>
