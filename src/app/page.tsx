@@ -859,11 +859,12 @@ function Cd({
   );
 }
 
-function Lbl({ children }: { children: React.ReactNode }) {
+function Lbl({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
     <div
       style={{
         fontSize: 10,
+        ...style,
         color: "#4a4540",
         fontFamily: V.m,
         letterSpacing: 2,
@@ -1883,6 +1884,57 @@ function MCPage() {
   const [selAgent, setSelAgent] = useState<typeof AG[0] | null>(null);
   const [notifs, setNotifs] = useState(NOTIFICATIONS);
   const unread = notifs.filter(n => !n.read).length;
+  
+  // Fetch real agents from Mission Control
+  const [realAgents, setRealAgents] = useState<any[]>([]);
+  const [mcConnected, setMcConnected] = useState(false);
+  
+  const MC_API_URL = process.env.NEXT_PUBLIC_MC_API_URL || "http://localhost:3100";
+  
+  useEffect(() => {
+    const fetchAgents = async () => {
+      try {
+        const res = await fetch(`${MC_API_URL}/status`);
+        const data = await res.json();
+        setMcConnected(true);
+        setRealAgents(data.agents || []);
+      } catch (err) {
+        console.error("Failed to fetch MC agents:", err);
+        setMcConnected(false);
+      }
+    };
+    
+    fetchAgents();
+    const interval = setInterval(fetchAgents, 5000);
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Map real agents to UI format
+  const displayAgents = realAgents.map((agent, idx) => ({
+    id: agent.id,
+    name: agent.name,
+    role: agent.type.charAt(0).toUpperCase() + agent.type.slice(1),
+    emoji: agent.type === "finance" ? "💰" : "🤖",
+    color: "#10B981",
+    status: agent.status === "idle" ? "idle" as const : "active" as const,
+    task: null,
+    hb: 0,
+    level: "Specialist",
+    stats: { tasksCompleted: 0, avgResponseMin: 0, contributions: 0, streak: 0 },
+    memory: {
+      currentTask: agent.currentTask || "No active task",
+      status: `Status: ${agent.status}`,
+      nextSteps: [],
+      lastUpdated: new Date(agent.lastActiveAt).toLocaleString()
+    },
+    chatHistory: [],
+    heartbeats: [],
+    dependsOn: [],
+    blockedBy: []
+  }));
+  
+  // Use real agents if connected, otherwise fallback to mock
+  const activeAgents = mcConnected && displayAgents.length > 0 ? displayAgents : AG;
 
   return (
     <div style={{ animation: "fadeIn 0.4s ease" }}>
@@ -1902,7 +1954,7 @@ function MCPage() {
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 5 }}>
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981", animation: "breathe 2s infinite" }} />
           <span style={{ fontSize: 11, color: "#10B981", fontFamily: V.m }}>
-            {AG.filter(a => a.status === "active").length} active
+            {activeAgents.filter(a => a.status === "active").length} active
           </span>
         </div>
       </div>
@@ -1919,7 +1971,7 @@ function MCPage() {
                   onDragOver={e => e.preventDefault()}
                   onDrop={e => {
                     e.preventDefault();
-                    setTasks(p => p.map(t => (t.id === e.dataTransfer.getData("tid") ? { ...t, status: col.key } : t)));
+                    setTasks(p => p.map(t => (t.id === e.dataTransfer.getData("tid") ? { ...t, status: col.key as any } : t)));
                   }}
                   style={{ flex: "1 1 0", minWidth: 180, maxWidth: 280 }}
                 >
@@ -2007,7 +2059,7 @@ function MCPage() {
         {/* AGENTS */}
         {sub === "agents" && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10 }}>
-            {AG.map((a, i) => {
+            {activeAgents.map((a, i) => {
               const t = tasks.find(x => x.id === a.task);
               return (
                 <Cd
@@ -2142,7 +2194,7 @@ function MCPage() {
         {sub === "deps" && (
           <div>
             <Lbl>Agent Dependencies — Who's waiting on whom</Lbl>
-            {AG.filter(a => a.dependsOn.length > 0 || a.blockedBy.length > 0).map((a, i) => (
+            {activeAgents.filter(a => a.dependsOn.length > 0 || a.blockedBy.length > 0).map((a, i) => (
               <Cd
                 key={a.id}
                 style={{
@@ -2199,11 +2251,11 @@ function MCPage() {
                 )}
               </Cd>
             ))}
-            {AG.filter(a => a.dependsOn.length === 0 && a.blockedBy.length === 0 && a.status !== "idle").length > 0 && (
+            {activeAgents.filter(a => a.dependsOn.length === 0 && a.blockedBy.length === 0 && a.status !== "idle").length > 0 && (
               <>
                 <Lbl style={{ marginTop: 20 }}>Independent (no dependencies)</Lbl>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {AG.filter(a => a.dependsOn.length === 0 && a.blockedBy.length === 0).map(a => (
+                  {activeAgents.filter(a => a.dependsOn.length === 0 && a.blockedBy.length === 0).map(a => (
                     <span
                       key={a.id}
                       style={{
@@ -2351,7 +2403,7 @@ function MCPage() {
               <div style={{ display: "flex", gap: 16 }}>
                 <div>
                   <span style={{ fontSize: 20, fontWeight: 700, color: "#10B981", fontFamily: V.d }}>
-                    {AG.filter(a => a.status === "active").length}
+                    {activeAgents.filter(a => a.status === "active").length}
                   </span>
                   <span style={{ fontSize: 11, color: "#5a5047" }}> active</span>
                 </div>
