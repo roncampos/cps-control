@@ -1613,7 +1613,23 @@ function RecapView() {
 // MISSION CONTROL — UPGRADED
 // ═══════════════════════════════════════════════════════════════
 
-function AgentConsole({ agent, onClose }: { agent: typeof AG[0]; onClose: () => void }) {
+function AgentConsole({ agent, onClose }: { agent: typeof AG[0] | {
+  id: string;
+  name: string;
+  role: string;
+  emoji: string;
+  color: string;
+  status: "active" | "idle" | "blocked";
+  task: string | null;
+  hb: number;
+  level: string;
+  stats: { tasksCompleted: number; avgResponseMin: number; contributions: number; streak: number };
+  memory: { currentTask: string; status: string; nextSteps: string[]; lastUpdated: string };
+  chatHistory: Array<{ from: "user" | "agent"; text: string; time: string }>;
+  heartbeats: Array<{ time: string; action: string; type: "work" | "ok" }>;
+  dependsOn: string[];
+  blockedBy: string[];
+}; onClose: () => void }) {
   const [tab, setTab] = useState("chat");
   const [msg, setMsg] = useState("");
   const [chat, setChat] = useState(agent.chatHistory);
@@ -1881,7 +1897,25 @@ function AgentConsole({ agent, onClose }: { agent: typeof AG[0]; onClose: () => 
 function MCPage() {
   const [tasks, setTasks] = useState(TASKS_INIT);
   const [sub, setSub] = useState("board");
-  const [selAgent, setSelAgent] = useState<typeof AG[0] | null>(null);
+  // Allow flexible agent type for both mock and real agents
+  type AgentType = typeof AG[0] | {
+    id: string;
+    name: string;
+    role: string;
+    emoji: string;
+    color: string;
+    status: "active" | "idle" | "blocked";
+    task: string | null;
+    hb: number;
+    level: string;
+    stats: { tasksCompleted: number; avgResponseMin: number; contributions: number; streak: number };
+    memory: { currentTask: string; status: string; nextSteps: string[]; lastUpdated: string };
+    chatHistory: Array<{ from: "user" | "agent"; text: string; time: string }>;
+    heartbeats: Array<{ time: string; action: string; type: "work" | "ok" }>;
+    dependsOn: string[];
+    blockedBy: string[];
+  };
+  const [selAgent, setSelAgent] = useState<AgentType | null>(null);
   const [notifs, setNotifs] = useState(NOTIFICATIONS);
   const unread = notifs.filter(n => !n.read).length;
   
