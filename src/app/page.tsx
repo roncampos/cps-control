@@ -1949,7 +1949,7 @@ function MCPage() {
       try {
         const res = await fetch(`${MC_API_URL}/approvals/pending`);
         const data = await res.json();
-        setPendingApprovals(data.pending || []);
+        setPendingApprovals(data.suggestions || data.pending || []);
       } catch (err) {
         console.error("Failed to fetch approvals:", err);
       }
@@ -1966,7 +1966,7 @@ function MCPage() {
       // Refresh approvals list
       const res = await fetch(`${MC_API_URL}/approvals/pending`);
       const data = await res.json();
-      setPendingApprovals(data.pending || []);
+      setPendingApprovals(data.suggestions || data.pending || []);
     } catch (err) {
       console.error(`Failed to ${action} approval:`, err);
     }
@@ -2191,7 +2191,11 @@ function MCPage() {
               </div>
             )}
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {pendingApprovals.map((approval: any, i: number) => (
+              {pendingApprovals.map((approval: any, i: number) => {
+                const sug = approval.suggestion || approval;
+                const filePath = sug.filePath || approval.title || "Unknown";
+                const fileName = filePath.split('/').pop();
+                return (
                 <Cd
                   key={approval.taskId || i}
                   style={{
@@ -2202,18 +2206,18 @@ function MCPage() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 12 }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 14, fontWeight: 600, color: "#f0ebe3", marginBottom: 4 }}>
-                        📝 {approval.title || "New Document Suggestion"}
+                        📝 {fileName}
                       </div>
                       <div style={{ fontSize: 11, color: "#5a5047", marginBottom: 8 }}>
-                        Suggested by: <span style={{ color: "#F59E0B" }}>{approval.agentName || "Finance Officer"}</span>
-                        {approval.reason && (
-                          <span style={{ marginLeft: 10 }}>• {approval.reason}</span>
+                        <span style={{ color: "#F59E0B" }}>Finance Officer</span>
+                        {sug.reason && (
+                          <span style={{ marginLeft: 10 }}>• {sug.reason}</span>
                         )}
                       </div>
                     </div>
                   </div>
                   
-                  {approval.content && (
+                  {sug.content && (
                     <div
                       style={{
                         background: "rgba(0,0,0,0.2)",
@@ -2228,7 +2232,7 @@ function MCPage() {
                       }}
                     >
                       <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                        {approval.content}
+                        {sug.content}
                       </pre>
                     </div>
                   )}
@@ -2272,7 +2276,8 @@ function MCPage() {
                     </button>
                   </div>
                 </Cd>
-              ))}
+              );
+              })}
             </div>
           </div>
         )}
