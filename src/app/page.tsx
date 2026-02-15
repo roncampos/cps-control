@@ -1922,6 +1922,7 @@ function MCPage() {
   // Fetch real agents from Mission Control
   const [realAgents, setRealAgents] = useState<any[]>([]);
   const [mcConnected, setMcConnected] = useState(false);
+  const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
   
   const MC_API_URL = process.env.NEXT_PUBLIC_MC_API_URL || "http://localhost:3100";
   
@@ -1942,6 +1943,34 @@ function MCPage() {
     const interval = setInterval(fetchAgents, 5000);
     return () => clearInterval(interval);
   }, []);
+  
+  useEffect(() => {
+    const fetchApprovals = async () => {
+      try {
+        const res = await fetch(`${MC_API_URL}/approvals/pending`);
+        const data = await res.json();
+        setPendingApprovals(data.pending || []);
+      } catch (err) {
+        console.error("Failed to fetch approvals:", err);
+      }
+    };
+    
+    fetchApprovals();
+    const interval = setInterval(fetchApprovals, 10000); // Poll every 10s
+    return () => clearInterval(interval);
+  }, []);
+  
+  const handleApproval = async (taskId: string, action: "approve" | "reject") => {
+    try {
+      await fetch(`${MC_API_URL}/approvals/${taskId}/${action}`, { method: "POST" });
+      // Refresh approvals list
+      const res = await fetch(`${MC_API_URL}/approvals/pending`);
+      const data = await res.json();
+      setPendingApprovals(data.pending || []);
+    } catch (err) {
+      console.error(`Failed to ${action} approval:`, err);
+    }
+  };
   
   // Map real agents to UI format
   const displayAgents = realAgents.map((agent, idx) => ({
@@ -1976,6 +2005,7 @@ function MCPage() {
         {[
           { k: "board", l: "⊞ Board" },
           { k: "agents", l: "◎ Agents" },
+          { k: "approvals", l: `✓ Approvals ${pendingApprovals.length > 0 ? `(${pendingApprovals.length})` : ""}` },
           { k: "heartbeat", l: "♡ Heartbeat" },
           { k: "deps", l: "🔗 Dependencies" },
           { k: "notifications", l: `🔔 ${unread > 0 ? `(${unread})` : ""}` },
@@ -2148,6 +2178,102 @@ function MCPage() {
                 </Cd>
               );
             })}
+          </div>
+        )}
+
+        {/* APPROVALS QUEUE */}
+        {sub === "approvals" && (
+          <div>
+            <Lbl>Document Suggestions — Agent Knowledge Refinement</Lbl>
+            {pendingApprovals.length === 0 && (
+              <div style={{ padding: 40, textAlign: "center", color: "#5a5047", fontStyle: "italic" }}>
+                No pending approvals
+              </div>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {pendingApprovals.map((approval: any, i: number) => (
+                <Cd
+                  key={approval.taskId || i}
+                  style={{
+                    animation: `fadeSlideIn 0.3s ease ${i * 0.05}s both`,
+                    borderLeft: "2px solid #F59E0B30"
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "#f0ebe3", marginBottom: 4 }}>
+                        📝 {approval.title || "New Document Suggestion"}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#5a5047", marginBottom: 8 }}>
+                        Suggested by: <span style={{ color: "#F59E0B" }}>{approval.agentName || "Finance Officer"}</span>
+                        {approval.reason && (
+                          <span style={{ marginLeft: 10 }}>• {approval.reason}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {approval.content && (
+                    <div
+                      style={{
+                        background: "rgba(0,0,0,0.2)",
+                        padding: 12,
+                        borderRadius: 8,
+                        marginBottom: 12,
+                        fontSize: 11,
+                        color: "#8a8078",
+                        fontFamily: "monospace",
+                        maxHeight: 200,
+                        overflow: "auto"
+                      }}
+                    >
+                      <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                        {approval.content}
+                      </pre>
+                    </div>
+                  )}
+                  
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={() => handleApproval(approval.taskId, "approve")}
+                      style={{
+                        padding: "8px 16px",
+                        background: "#10B981",
+                        color: "white",
+                        border: "none",
+                        borderRadius: 8,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        fontFamily: V.m,
+                        textTransform: "uppercase",
+                        letterSpacing: 0.5
+                      }}
+                    >
+                      ✓ Approve & Commit
+                    </button>
+                    <button
+                      onClick={() => handleApproval(approval.taskId, "reject")}
+                      style={{
+                        padding: "8px 16px",
+                        background: "rgba(239, 68, 68, 0.2)",
+                        color: "#EF4444",
+                        border: "1px solid rgba(239, 68, 68, 0.3)",
+                        borderRadius: 8,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        fontFamily: V.m,
+                        textTransform: "uppercase",
+                        letterSpacing: 0.5
+                      }}
+                    >
+                      ✗ Reject
+                    </button>
+                  </div>
+                </Cd>
+              ))}
+            </div>
           </div>
         )}
 
