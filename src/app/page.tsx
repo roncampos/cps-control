@@ -15,7 +15,8 @@ const V = {
   m: "'DM Mono', monospace"
 };
 
-const PRI = {
+const PRI: Record<string, { l: string; c: string }> = {
+  critical: { l: "CRIT", c: "#DC2626" },
   high: { l: "HIGH", c: "#EF4444" },
   medium: { l: "MED", c: "#F59E0B" },
   low: { l: "LOW", c: "#6b6055" }
@@ -1923,6 +1924,9 @@ function MCPage() {
   const [realAgents, setRealAgents] = useState<any[]>([]);
   const [mcConnected, setMcConnected] = useState(false);
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
+  const [realTasks, setRealTasks] = useState<any[]>([]);
+  const [realActivity, setRealActivity] = useState<any[]>([]);
+  const [realAlerts, setRealAlerts] = useState<any[]>([]);
   
   const MC_API_URL = process.env.NEXT_PUBLIC_MC_API_URL || "http://localhost:3100";
   
@@ -1971,6 +1975,57 @@ function MCPage() {
       console.error(`Failed to ${action} approval:`, err);
     }
   };
+
+  // Fetch tasks
+  useEffect(() => {
+    const fetchTasks = async () => {
+      try {
+        const res = await fetch(`${MC_API_URL}/tasks`);
+        const data = await res.json();
+        setRealTasks(data.tasks || []);
+      } catch (err) {
+        console.error("Failed to fetch tasks:", err);
+      }
+    };
+    
+    fetchTasks();
+    const interval = setInterval(fetchTasks, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch activity log
+  useEffect(() => {
+    const fetchActivity = async () => {
+      try {
+        const res = await fetch(`${MC_API_URL}/activity?limit=100`);
+        const data = await res.json();
+        setRealActivity(data.activity || []);
+      } catch (err) {
+        console.error("Failed to fetch activity:", err);
+      }
+    };
+    
+    fetchActivity();
+    const interval = setInterval(fetchActivity, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch alerts
+  useEffect(() => {
+    const fetchAlerts = async () => {
+      try {
+        const res = await fetch(`${MC_API_URL}/alerts`);
+        const data = await res.json();
+        setRealAlerts(data.alerts || []);
+      } catch (err) {
+        console.error("Failed to fetch alerts:", err);
+      }
+    };
+    
+    fetchAlerts();
+    const interval = setInterval(fetchAlerts, 5000);
+    return () => clearInterval(interval);
+  }, []);
   
   // Map real agents to UI format
   const displayAgents = realAgents.map((agent, idx) => ({
@@ -1999,6 +2054,44 @@ function MCPage() {
   // Use real agents if connected, otherwise fallback to mock
   const activeAgents = mcConnected && displayAgents.length > 0 ? displayAgents : AG;
 
+  // Map Mission Control tasks to board format
+  const mapTaskStatus = (mcStatus: string) => {
+    const statusMap: Record<string, string> = {
+      "queued": "inbox",
+      "assigned": "assigned",
+      "in_progress": "in_progress",
+      "waiting_dependency": "blocked",
+      "completed": "done",
+      "failed": "blocked",
+      "cancelled": "done",
+    };
+    return statusMap[mcStatus] || "inbox";
+  };
+
+  const boardTasks = realTasks.map(t => ({
+    id: t.id,
+    title: t.title,
+    status: mapTaskStatus(t.status),
+    assignees: t.assignedTo ? [t.assignedTo] : [],
+    priority: t.priority || "medium",
+    tags: [t.type],
+  }));
+
+  // Use real tasks if available, otherwise mock
+  const displayTasks = realTasks.length > 0 ? boardTasks : tasks;
+
+  // Map real alerts to notifications format
+  const displayNotifs = realAlerts.length > 0 ? realAlerts.map(a => ({
+    id: a.id,
+    agent: a.agentName,
+    from: a.agentId || "",
+    time: new Date(a.timestamp).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+    text: a.message,
+    type: a.level === "critical" ? "critical" : a.level === "warning" ? "alert" : "info",
+    read: a.read,
+    task: "",
+  })) : notifs;
+
   return (
     <div style={{ animation: "fadeIn 0.4s ease" }}>
       <div style={{ display: "flex", gap: 4, marginBottom: 18, alignItems: "center", flexWrap: "wrap" }}>
@@ -2008,7 +2101,7 @@ function MCPage() {
           { k: "approvals", l: `✓ Approvals ${pendingApprovals.length > 0 ? `(${pendingApprovals.length})` : ""}` },
           { k: "heartbeat", l: "♡ Heartbeat" },
           { k: "deps", l: "🔗 Dependencies" },
-          { k: "notifications", l: `🔔 ${unread > 0 ? `(${unread})` : ""}` },
+          { k: "notifications", l: `🔔 ${displayNotifs.filter(n => !n.read).length > 0 ? `(${displayNotifs.filter(n => !n.read).length})` : ""}` },
           { k: "standup", l: "📊 Standup" }
         ].map(t => (
           <Btn key={t.k} active={sub === t.k} onClick={() => setSub(t.k)}>
@@ -2028,7 +2121,7 @@ function MCPage() {
         {sub === "board" && (
           <div style={{ display: "flex", gap: 8, minWidth: "min-content" }}>
             {MC_COLS.map(col => {
-              const ct = tasks.filter(t => t.status === col.key);
+              const ct = displayTasks.filter(t => t.status === col.key);
               return (
                 <div
                   key={col.key}
@@ -2285,73 +2378,40 @@ function MCPage() {
         {/* HEARTBEAT MONITOR */}
         {sub === "heartbeat" && (
           <div>
-            <Lbl>Live Heartbeat Monitor — 15 Min Intervals</Lbl>
-            {AG.map((a, i) => (
+            <Lbl>Agent Activity Log — Real-time monitoring</Lbl>
+            {realActivity.length === 0 && (
+              <div style={{ padding: 40, textAlign: "center", color: "#5a5047", fontStyle: "italic" }}>
+                No activity yet. Activity will appear when agents complete tasks.
+              </div>
+            )}
+            {realActivity.map((act, i) => (
               <div
-                key={a.id}
+                key={act.id}
                 style={{
                   display: "flex",
                   gap: 12,
-                  padding: "10px 0",
-                  borderBottom: "1px solid rgba(255,255,255,0.03)",
-                  animation: `fadeSlideIn 0.3s ease ${i * 0.03}s both`,
-                  cursor: "pointer"
+                  padding: "12px 14px",
+                  borderRadius: 8,
+                  background: "rgba(255,255,255,0.02)",
+                  border: "1px solid rgba(255,255,255,0.04)",
+                  marginBottom: 6,
+                  animation: `fadeSlideIn 0.3s ease ${i * 0.03}s both`
                 }}
-                onClick={() => setSelAgent(a)}
               >
-                <div style={{ width: 100, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                  <AgentAv id={a.id} size={22} />
-                  <span style={{ fontSize: 12, color: a.color, fontWeight: 600 }}>{a.name}</span>
+                <div style={{ fontSize: 16, width: 24, textAlign: "center" }}>
+                  {act.type === "task_started" ? "▶️" : act.type === "task_completed" ? "✅" : act.type === "alert_sent" ? "⚠️" : act.type === "doc_suggested" ? "📝" : "💓"}
                 </div>
-                <div style={{ flex: 1, display: "flex", gap: 3, alignItems: "center" }}>
-                  {a.heartbeats.slice(0, 6).map((hb, j) => (
-                    <div
-                      key={j}
-                      title={`${hb.time}: ${hb.action}`}
-                      style={{
-                        flex: 1,
-                        height: 28,
-                        borderRadius: 4,
-                        background: hb.type === "work" ? `${a.color}20` : hb.type === "blocked" ? "rgba(239,68,68,0.15)" : "rgba(255,255,255,0.02)",
-                        border: `1px solid ${
-                          hb.type === "work" ? a.color + "30" : hb.type === "blocked" ? "rgba(239,68,68,0.2)" : "rgba(255,255,255,0.04)"
-                        }`,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        cursor: "pointer",
-                        transition: "all 0.2s"
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: 8,
-                          color: hb.type === "work" ? a.color : hb.type === "blocked" ? "#EF4444" : "#3a3530",
-                          fontFamily: V.m
-                        }}
-                      >
-                        {hb.type === "work" ? "◆" : hb.type === "blocked" ? "✕" : "—"}
-                      </span>
-                    </div>
-                  ))}
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#F59E0B" }}>{act.agentName}</span>
+                    <span style={{ fontSize: 10, color: "#3a3530", fontFamily: V.m, marginLeft: "auto" }}>
+                      {new Date(act.timestamp).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: 13, color: "#8a8078", margin: 0, lineHeight: 1.5 }}>{act.message}</p>
                 </div>
-                <div style={{ width: 60, textAlign: "right", fontSize: 10, color: "#4a4540", fontFamily: V.m, flexShrink: 0 }}>♡ {a.hb}m ago</div>
               </div>
             ))}
-            <div style={{ display: "flex", gap: 16, marginTop: 16, fontSize: 10, color: "#5a5047", fontFamily: V.m }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 3, background: "rgba(245,158,11,0.2)", border: "1px solid rgba(245,158,11,0.3)" }} /> Work
-                done
-              </span>
-              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 3, background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.2)" }} />{" "}
-                Blocked
-              </span>
-              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 3, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)" }} />{" "}
-                Idle/OK
-              </span>
-            </div>
           </div>
         )}
 
@@ -2449,39 +2509,51 @@ function MCPage() {
         {sub === "notifications" && (
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <span style={{ fontSize: 12, color: "#8a8078" }}>{unread} unread</span>
+              <span style={{ fontSize: 12, color: "#8a8078" }}>{displayNotifs.filter(n => !n.read).length} unread</span>
               <button
-                onClick={() => setNotifs(p => p.map(n => ({ ...n, read: true })))}
+                onClick={async () => {
+                  if (realAlerts.length > 0) {
+                    for (const alert of displayNotifs.filter(n => !n.read)) {
+                      await fetch(`${MC_API_URL}/alerts/${alert.id}/read`, { method: "POST" });
+                    }
+                  } else {
+                    setNotifs(p => p.map(n => ({ ...n, read: true })));
+                  }
+                }}
                 style={{ fontSize: 11, color: "#F59E0B", background: "none", border: "none", cursor: "pointer", fontFamily: V.m }}
               >
                 Mark all read
               </button>
             </div>
-            {notifs.map((n, i) => {
-              const a = aMap[n.from];
-              const icons = { mention: "💬", review: "👁", alert: "⚠️", milestone: "✓" };
+            {displayNotifs.map((n, i) => {
+              const icons: Record<string, string> = { mention: "💬", review: "👁", alert: "⚠️", critical: "🚨", info: "💡", milestone: "✓" };
               return (
                 <div
                   key={n.id}
-                  onClick={() => setNotifs(p => p.map(x => (x.id === n.id ? { ...x, read: true } : x)))}
+                  onClick={async () => {
+                    if (realAlerts.length > 0) {
+                      await fetch(`${MC_API_URL}/alerts/${n.id}/read`, { method: "POST" });
+                    } else {
+                      setNotifs(p => p.map(x => (x.id === n.id ? { ...x, read: true } : x)));
+                    }
+                  }}
                   style={{
                     display: "flex",
                     gap: 12,
                     padding: "12px 14px",
                     borderRadius: 10,
                     background: n.read ? "transparent" : "rgba(245,158,11,0.03)",
-                    borderLeft: n.read ? "3px solid transparent" : `3px solid ${a?.color || "#F59E0B"}`,
+                    borderLeft: n.read ? "3px solid transparent" : `3px solid #F59E0B`,
                     marginBottom: 4,
                     cursor: "pointer",
                     animation: `fadeSlideIn 0.3s ease ${i * 0.05}s both`,
                     transition: "background 0.2s"
                   }}
                 >
-                  <div style={{ fontSize: 16, width: 20, textAlign: "center" }}>{icons[n.type]}</div>
+                  <div style={{ fontSize: 16, width: 20, textAlign: "center" }}>{icons[n.type] || "💡"}</div>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                      <AgentAv id={n.from} size={18} />
-                      <span style={{ fontSize: 12, fontWeight: 600, color: a?.color }}>{a?.name}</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "#F59E0B" }}>{"agent" in n ? n.agent : aMap[n.from]?.name || "Agent"}</span>
                       <span style={{ fontSize: 10, color: "#3a3530", fontFamily: V.m, marginLeft: "auto" }}>{n.time}</span>
                     </div>
                     <p style={{ fontSize: 13, color: n.read ? "#6b6055" : "#c4b8a8", margin: 0, lineHeight: 1.5 }}>{n.text}</p>
