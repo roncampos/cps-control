@@ -2028,16 +2028,36 @@ function MCPage() {
   }, []);
   
   // Map real agents to UI format
+  const getAgentEmoji = (type: string) => {
+    const emojiMap: Record<string, string> = {
+      finance: "💰",
+      deals: "🏠",
+      operations: "⚙️",
+      sales: "📞",
+    };
+    return emojiMap[type] || "🤖";
+  };
+
+  const getAgentColor = (type: string) => {
+    const colorMap: Record<string, string> = {
+      finance: "#10B981", // green
+      deals: "#3B82F6",   // blue
+      operations: "#8B5CF6", // purple
+      sales: "#F59E0B",   // orange
+    };
+    return colorMap[type] || "#6B7280";
+  };
+
   const displayAgents = realAgents.map((agent, idx) => ({
     id: agent.id,
     name: agent.name,
     role: agent.type.charAt(0).toUpperCase() + agent.type.slice(1),
-    emoji: agent.type === "finance" ? "💰" : "🤖",
-    color: "#10B981",
+    emoji: getAgentEmoji(agent.type),
+    color: getAgentColor(agent.type),
     status: agent.status === "idle" ? "idle" as const : "active" as const,
     task: null,
     hb: 0,
-    level: "Specialist",
+    level: "Intern",
     stats: { tasksCompleted: 0, avgResponseMin: 0, contributions: 0, streak: 0 },
     memory: {
       currentTask: agent.currentTask || "No active task",
