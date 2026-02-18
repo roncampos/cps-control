@@ -2097,8 +2097,8 @@ function MCPage() {
     tags: [t.type],
   }));
 
-  // Use real tasks if available, otherwise mock
-  const displayTasks = realTasks.length > 0 ? boardTasks : tasks;
+  // Use real tasks from API; only fall back to mock if API hasn't loaded yet (mcConnected is false)
+  const displayTasks = (realTasks.length > 0 || mcConnected) ? boardTasks : tasks;
 
   // Map real alerts to notifications format
   const displayNotifs = realAlerts.length > 0 ? realAlerts.map(a => ({
