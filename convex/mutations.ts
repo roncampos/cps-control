@@ -119,6 +119,60 @@ export const createAccountabilityRole = mutation({
 });
 
 // ==========================================
+// TASK MUTATIONS
+// ==========================================
+
+export const createTask = mutation({
+  args: {
+    title: v.string(),
+    description: v.optional(v.string()),
+    assignedTo: v.string(),
+    createdBy: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("in_progress"),
+      v.literal("blocked"),
+      v.literal("complete")
+    ),
+    priority: v.union(
+      v.literal("urgent"),
+      v.literal("high"),
+      v.literal("medium"),
+      v.literal("low")
+    ),
+    dueDate: v.optional(v.number()),
+    tags: v.array(v.string()),
+    relatedRockId: v.optional(v.id("rocks")),
+    relatedIssueId: v.optional(v.id("issues")),
+    relatedPropertyId: v.optional(v.id("properties")),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("tasks", {
+      ...args,
+      createdAt: Date.now(),
+    });
+  },
+});
+
+export const updateTaskStatus = mutation({
+  args: {
+    id: v.id("tasks"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("in_progress"),
+      v.literal("blocked"),
+      v.literal("complete")
+    ),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      status: args.status,
+      ...(args.status === "complete" ? { completedAt: Date.now() } : {}),
+    });
+  },
+});
+
+// ==========================================
 // ACTIVITY LOG
 // ==========================================
 

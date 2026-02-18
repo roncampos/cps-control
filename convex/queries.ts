@@ -88,6 +88,56 @@ export const getIssuesByPriority = query({
 });
 
 // ==========================================
+// TASK QUERIES
+// ==========================================
+
+export const listTasks = query({
+  args: {
+    status: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const allTasks = await ctx.db
+      .query("tasks")
+      .order("desc")
+      .collect();
+    
+    if (args.status) {
+      return allTasks.filter((t) => t.status === args.status);
+    }
+    return allTasks;
+  },
+});
+
+export const getTasksByStatus = query({
+  args: {
+    status: v.union(
+      v.literal("pending"),
+      v.literal("in_progress"),
+      v.literal("blocked"),
+      v.literal("complete")
+    ),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("tasks")
+      .withIndex("by_status", (q) => q.eq("status", args.status as any))
+      .order("desc")
+      .collect();
+  },
+});
+
+export const getTasksByAssignee = query({
+  args: { assignedTo: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("tasks")
+      .withIndex("by_assignedTo", (q) => q.eq("assignedTo", args.assignedTo))
+      .order("desc")
+      .collect();
+  },
+});
+
+// ==========================================
 // ACCOUNTABILITY CHART QUERIES
 // ==========================================
 

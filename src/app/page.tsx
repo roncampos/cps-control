@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
 
 // ═══════════════════════════════════════════════════════════════
 // CPS CONTROL v3 — Unified Command Center
@@ -1924,7 +1926,7 @@ function MCPage() {
   const [realAgents, setRealAgents] = useState<any[]>([]);
   const [mcConnected, setMcConnected] = useState(false);
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
-  const [realTasks, setRealTasks] = useState<any[]>([]);
+  const convexTasks = useQuery(api.queries.listTasks, {}) ?? [];
   const [realActivity, setRealActivity] = useState<any[]>([]);
   const [realAlerts, setRealAlerts] = useState<any[]>([]);
   
@@ -1976,22 +1978,7 @@ function MCPage() {
     }
   };
 
-  // Fetch tasks
-  useEffect(() => {
-    const fetchTasks = async () => {
-      try {
-        const res = await fetch(`${MC_API_URL}/tasks`);
-        const data = await res.json();
-        setRealTasks(data.tasks || []);
-      } catch (err) {
-        console.error("Failed to fetch tasks:", err);
-      }
-    };
-    
-    fetchTasks();
-    const interval = setInterval(fetchTasks, 5000);
-    return () => clearInterval(interval);
-  }, []);
+  // Tasks are now fetched from Convex in real-time via useQuery above
 
   // Fetch activity log
   useEffect(() => {
@@ -2088,17 +2075,28 @@ function MCPage() {
     return statusMap[mcStatus] || "inbox";
   };
 
-  const boardTasks = realTasks.map(t => ({
-    id: t.id,
+  // Map Convex tasks to board format
+  const mapConvexTaskStatus = (status: string): string => {
+    const statusMap: Record<string, string> = {
+      pending: "inbox",
+      in_progress: "in_progress",
+      blocked: "blocked",
+      complete: "done",
+    };
+    return statusMap[status] || "inbox";
+  };
+
+  const boardTasks = convexTasks.map(t => ({
+    id: t._id,
     title: t.title,
-    status: mapTaskStatus(t.status),
+    status: mapConvexTaskStatus(t.status),
     assignees: t.assignedTo ? [t.assignedTo] : [],
-    priority: t.priority || "medium",
-    tags: [t.type],
+    priority: t.priority === "urgent" ? "critical" : t.priority,
+    tags: t.tags || [],
   }));
 
-  // Use real tasks from API; only fall back to mock if API hasn't loaded yet (mcConnected is false)
-  const displayTasks = (realTasks.length > 0 || mcConnected) ? boardTasks : tasks;
+  // Use real tasks from Convex; only fall back to mock if Convex hasn't loaded yet
+  const displayTasks = (convexTasks.length > 0 || mcConnected) ? boardTasks : tasks;
 
   // Map real alerts to notifications format
   const displayNotifs = realAlerts.length > 0 ? realAlerts.map(a => ({
