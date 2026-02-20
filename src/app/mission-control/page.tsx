@@ -54,6 +54,13 @@ interface Approval {
 
 const MC_API = "http://localhost:3100";
 
+interface DashboardHeader {
+  title: string;
+  tasksPending: number;
+  tasksPendingLabel: string;
+  convexTasksPending: number | null;
+}
+
 export default function MissionControlPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -61,6 +68,7 @@ export default function MissionControlPage() {
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
+  const [dashboardHeader, setDashboardHeader] = useState<DashboardHeader | null>(null);
   const [previewingTaskId, setPreviewingTaskId] = useState<string | null>(null);
   const [previewContent, setPreviewContent] = useState<{
     oldContent: string | null;
@@ -71,6 +79,7 @@ export default function MissionControlPage() {
   useEffect(() => {
     // Initial data fetch
     fetchStatus();
+    fetchDashboardHeader();
 
     // Set up WebSocket for real-time updates
     const ws = new WebSocket(`ws://localhost:3100/ws`);
@@ -100,7 +109,10 @@ export default function MissionControlPage() {
     };
 
     // Polling fallback
-    const interval = setInterval(fetchStatus, 5000);
+    const interval = setInterval(() => {
+      fetchStatus();
+      fetchDashboardHeader();
+    }, 5000);
 
     return () => {
       ws.close();
@@ -118,6 +130,16 @@ export default function MissionControlPage() {
     } catch (err) {
       console.error("Failed to fetch status:", err);
       setLoading(false);
+    }
+  };
+
+  const fetchDashboardHeader = async () => {
+    try {
+      const res = await fetch(`${MC_API}/dashboard/header`);
+      const data = await res.json();
+      setDashboardHeader(data);
+    } catch (err) {
+      console.error("Failed to fetch dashboard header:", err);
     }
   };
 
@@ -234,6 +256,16 @@ export default function MissionControlPage() {
             <div className="flex items-center gap-3">
               <div className={`w-3 h-3 rounded-full ${connected ? "bg-green-500" : "bg-red-500"}`}></div>
               <h1 className="text-2xl font-bold text-gray-900">Mission Control</h1>
+              {dashboardHeader && (
+                <span className="text-sm font-medium px-3 py-1 rounded bg-blue-100 text-blue-800">
+                  {dashboardHeader.tasksPendingLabel}
+                  {dashboardHeader.convexTasksPending !== null && dashboardHeader.convexTasksPending > 0 && (
+                    <span className="ml-2 text-xs opacity-75">
+                      ({dashboardHeader.convexTasksPending} in Convex)
+                    </span>
+                  )}
+                </span>
+              )}
               <span className={`text-sm font-medium px-2 py-1 rounded ${
                 connected ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
               }`}>
