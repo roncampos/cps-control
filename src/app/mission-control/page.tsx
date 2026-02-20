@@ -52,7 +52,8 @@ interface Approval {
   createdAt: string;
 }
 
-const MC_API = "http://localhost:3100";
+const MC_API = process.env.NEXT_PUBLIC_MC_API || "http://localhost:3100";
+const WS_URL = MC_API.replace(/^http/, "ws") + "/ws";
 
 interface DashboardHeader {
   title: string;
@@ -81,44 +82,83 @@ export default function MissionControlPage() {
     fetchStatus();
     fetchDashboardHeader();
 
-    // Set up WebSocket for real-time updates
-    const ws = new WebSocket(`ws://localhost:3100/ws`);
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: NodeJS.Timeout | null = null;
+    let reconnectAttempts = 0;
+    const maxReconnectDelay = 30000; // 30 seconds max
 
-    ws.onopen = () => {
-      console.log("[MC] WebSocket connected");
-      setConnected(true);
+    const connectWebSocket = () => {
+      ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        console.log("[MC] WebSocket connected");
+        setConnected(true);
+        reconnectAttempts = 0; // Reset on successful connection
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log("[MC] Event:", data);
+
+          if (data.type === "state") {
+            setAgents(data.data.agents);
+            setMetrics(data.data.metrics);
+          } else if (data.type === "agent:status") {
+            // Update specific agent from event data
+            setAgents(prev => 
+              prev.map(a => a.id === data.data.agentId ? { ...a, ...data.data } : a)
+            );
+          } else if (data.type === "agent:spawned") {
+            // Add new agent from event data
+            setAgents(prev => [...prev, data.data]);
+          } else if (data.type === "task:created") {
+            // Add new task from event data
+            setTasks(prev => [...prev, data.data]);
+          } else if (data.type === "task:updated") {
+            // Update specific task from event data
+            setTasks(prev =>
+              prev.map(t => t.id === data.data.task.id ? data.data.task : t)
+            );
+          }
+        } catch (err) {
+          console.error("[MC] Failed to parse WebSocket message:", err);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log("[MC] WebSocket disconnected");
+        setConnected(false);
+
+        // Exponential backoff for reconnection
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), maxReconnectDelay);
+        reconnectAttempts++;
+        
+        console.log(`[MC] Reconnecting in ${delay}ms (attempt ${reconnectAttempts})...`);
+        reconnectTimeout = setTimeout(connectWebSocket, delay);
+      };
+
+      ws.onerror = (err) => {
+        console.error("[MC] WebSocket error:", err);
+      };
     };
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      console.log("[MC] Event:", data);
+    connectWebSocket();
 
-      if (data.type === "state") {
-        setAgents(data.data.agents);
-        setMetrics(data.data.metrics);
-      } else if (data.type === "agent:status" || data.type === "agent:spawned") {
-        fetchStatus();
-      } else if (data.type === "task:created" || data.type === "task:updated") {
-        fetchTasks();
-      }
-    };
-
-    ws.onclose = () => {
-      console.log("[MC] WebSocket disconnected");
-      setConnected(false);
-    };
-
-    // Polling fallback
+    // Polling fallback - only when disconnected
     const interval = setInterval(() => {
-      fetchStatus();
-      fetchDashboardHeader();
+      if (!connected) {
+        fetchStatus();
+        fetchDashboardHeader();
+      }
     }, 5000);
 
     return () => {
-      ws.close();
+      if (ws) ws.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
       clearInterval(interval);
     };
-  }, []);
+  }, [connected]);
 
   const fetchStatus = async () => {
     try {
