@@ -23,7 +23,7 @@ const JSON_HEADERS = { "Content-Type": "application/json" };
 // V1 ENDPOINTS (existing, preserved)
 // ==========================================
 
-// POST /tasks - called by Railway MC to create tasks
+// POST /tasks - called by Railway MC to create tasks (with dedup)
 http.route({
   path: "/tasks",
   method: "POST",
@@ -32,6 +32,18 @@ http.route({
     if (authError) return authError;
 
     const body = await request.json() as any;
+    const title = body.title || "Untitled Task";
+
+    // Deduplicate: check if a task with the same title already exists in non-done status
+    const existingTasks = await ctx.runQuery(api.queries.listTasks, {});
+    const duplicate = existingTasks.find(
+      (t: any) => t.title === title && t.status !== "complete" && t.status !== "done"
+    );
+    if (duplicate) {
+      return new Response(JSON.stringify({ success: true, id: duplicate._id, deduplicated: true }), {
+        headers: JSON_HEADERS,
+      });
+    }
 
     // Map Railway task types/priorities to Convex schema
     const priorityMap: Record<string, string> = {
@@ -51,7 +63,7 @@ http.route({
     };
 
     const taskId = await ctx.runMutation(api.mutations.createTask, {
-      title: body.title || "Untitled Task",
+      title,
       description: body.description,
       assignedTo: body.assignedTo || body.createdBy || "team",
       createdBy: body.createdBy || "api",
@@ -138,7 +150,7 @@ http.route({
   }),
 });
 
-// POST /tasks/v2 — create v2 task with full schema
+// POST /tasks/v2 — create v2 task with full schema (with dedup)
 http.route({
   path: "/tasks/v2",
   method: "POST",
@@ -147,6 +159,19 @@ http.route({
     if (authError) return authError;
 
     const body = await request.json() as any;
+    const title = body.title || "Untitled Task";
+
+    // Deduplicate: check if a task with the same title already exists in non-done status
+    const existingTasks = await ctx.runQuery(api.queries.listTasks, {});
+    const duplicate = existingTasks.find(
+      (t: any) => t.title === title && t.status !== "complete" && t.status !== "done"
+    );
+    if (duplicate) {
+      return new Response(JSON.stringify({ success: true, id: duplicate._id, deduplicated: true }), {
+        headers: JSON_HEADERS,
+      });
+    }
+
     const taskId = await ctx.runMutation(api.taskMutationsV2.createV2, {
       title: body.title || "Untitled Task",
       description: body.description,
