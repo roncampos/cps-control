@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import AgentRoster from "@/components/mission-control/AgentRoster";
+import ActivityFeed from "@/components/mission-control/ActivityFeed";
+import BugBoard from "@/components/mission-control/BugBoard";
+import WorkQueue from "@/components/mission-control/WorkQueue";
 
 interface Agent {
   id: string;
@@ -76,6 +80,8 @@ export default function MissionControlPage() {
     newContent: string;
     exists: boolean;
   } | null>(null);
+  const [view, setView] = useState<"v2" | "legacy">("v2");
+  const [v2Tab, setV2Tab] = useState<"tasks" | "bugs">("tasks");
 
   useEffect(() => {
     // Initial data fetch
@@ -289,124 +295,167 @@ export default function MissionControlPage() {
     <div className="min-h-screen bg-gray-50">
       <Header />
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Status Banner */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+      <div className="max-w-7xl mx-auto px-4 py-4">
+        {/* View Toggle + Status Banner */}
+        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className={`w-3 h-3 rounded-full ${connected ? "bg-green-500" : "bg-red-500"}`}></div>
               <h1 className="text-2xl font-bold text-gray-900">Mission Control</h1>
-              {dashboardHeader && (
-                <span className="text-sm font-medium px-3 py-1 rounded bg-blue-100 text-blue-800">
-                  {dashboardHeader.tasksPendingLabel}
-                  {dashboardHeader.convexTasksPending !== null && dashboardHeader.convexTasksPending > 0 && (
-                    <span className="ml-2 text-xs opacity-75">
-                      ({dashboardHeader.convexTasksPending} in Convex)
-                    </span>
-                  )}
-                </span>
-              )}
-              <span className={`text-sm font-medium px-2 py-1 rounded ${
+              <span className={`text-xs font-medium px-2 py-1 rounded ${
                 connected ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
               }`}>
-                {connected ? "OPERATIONAL" : "DISCONNECTED"}
+                {connected ? "LIVE" : "OFFLINE"}
               </span>
             </div>
-            <div className="text-sm text-gray-500">
-              Real-time monitoring via WebSocket
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setView("v2")}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  view === "v2"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                Agent Squad
+              </button>
+              <button
+                onClick={() => setView("legacy")}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  view === "legacy"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                Legacy
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Metrics */}
-        {metrics && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <MetricCard
-              label="Agents Active"
-              value={metrics.agentsActive}
-              total={metrics.totalAgents}
-              color="blue"
-            />
-            <MetricCard
-              label="Tasks Active"
-              value={metrics.tasksActive}
-              color="yellow"
-            />
-            <MetricCard
-              label="Tasks Completed"
-              value={metrics.tasksCompleted}
-              color="green"
-            />
-            <MetricCard
-              label="Tasks Failed"
-              value={metrics.tasksFailed}
-              color="red"
-            />
+        {/* V2 View — 3-column layout with Convex real-time */}
+        {view === "v2" && (
+          <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr_280px] gap-4">
+            {/* Left: Agent Roster */}
+            <div className="lg:sticky lg:top-4 lg:self-start">
+              <AgentRoster />
+            </div>
+
+            {/* Center: Main Content */}
+            <div>
+              {/* Tab Navigation */}
+              <div className="flex gap-1 mb-4 bg-white rounded-lg border border-gray-200 p-1">
+                <button
+                  onClick={() => setV2Tab("tasks")}
+                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                    v2Tab === "tasks"
+                      ? "bg-blue-50 text-blue-700"
+                      : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  Tasks
+                </button>
+                <button
+                  onClick={() => setV2Tab("bugs")}
+                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                    v2Tab === "bugs"
+                      ? "bg-blue-50 text-blue-700"
+                      : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  Bugs
+                </button>
+              </div>
+
+              {/* Approval Queue (shown in both tabs if present) */}
+              {approvals.length > 0 && (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
+                      Pending Doc Suggestions
+                      <span className="ml-2 px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                        {approvals.length}
+                      </span>
+                    </h2>
+                  </div>
+                  <div className="space-y-3">
+                    {approvals.map((approval) => (
+                      <ApprovalCard
+                        key={approval.taskId}
+                        approval={approval}
+                        isPreviewing={previewingTaskId === approval.taskId}
+                        previewContent={previewContent}
+                        onPreview={() => handlePreview(approval.taskId)}
+                        onApprove={() => handleApprove(approval.taskId)}
+                        onReject={() => handleReject(approval.taskId)}
+                        onClosePreview={() => {
+                          setPreviewingTaskId(null);
+                          setPreviewContent(null);
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Tab Content */}
+              {v2Tab === "tasks" && <WorkQueue />}
+              {v2Tab === "bugs" && <BugBoard />}
+            </div>
+
+            {/* Right: Activity Feed */}
+            <div className="lg:sticky lg:top-4 lg:self-start">
+              <ActivityFeed />
+            </div>
           </div>
         )}
 
-        {/* Approval Queue */}
-        {approvals.length > 0 && (
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">
-                📝 Pending Doc Suggestions
-                <span className="ml-2 px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
-                  {approvals.length}
-                </span>
-              </h2>
+        {/* Legacy View — existing WebSocket-based dashboard */}
+        {view === "legacy" && (
+          <>
+            {/* Metrics */}
+            {metrics && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <MetricCard label="Agents Active" value={metrics.agentsActive} total={metrics.totalAgents} color="blue" />
+                <MetricCard label="Tasks Active" value={metrics.tasksActive} color="yellow" />
+                <MetricCard label="Tasks Completed" value={metrics.tasksCompleted} color="green" />
+                <MetricCard label="Tasks Failed" value={metrics.tasksFailed} color="red" />
+              </div>
+            )}
+
+            {/* Agents */}
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Active Agents</h2>
+              {agents.length === 0 ? (
+                <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-500">
+                  No agents running
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {agents.map((agent) => (
+                    <AgentCard key={agent.id} agent={agent} />
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="space-y-4">
-              {approvals.map((approval) => (
-                <ApprovalCard
-                  key={approval.taskId}
-                  approval={approval}
-                  isPreviewing={previewingTaskId === approval.taskId}
-                  previewContent={previewContent}
-                  onPreview={() => handlePreview(approval.taskId)}
-                  onApprove={() => handleApprove(approval.taskId)}
-                  onReject={() => handleReject(approval.taskId)}
-                  onClosePreview={() => {
-                    setPreviewingTaskId(null);
-                    setPreviewContent(null);
-                  }}
-                />
-              ))}
+
+            {/* Tasks */}
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Tasks</h2>
+              {tasks.length === 0 ? (
+                <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-500">
+                  No tasks yet
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {tasks.slice(0, 10).map((task) => (
+                    <TaskCard key={task.id} task={task} agents={agents} />
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
+          </>
         )}
-
-        {/* Agents */}
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Active Agents</h2>
-          {agents.length === 0 ? (
-            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-500">
-              No agents running
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {agents.map((agent) => (
-                <AgentCard key={agent.id} agent={agent} />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Tasks */}
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Tasks</h2>
-          {tasks.length === 0 ? (
-            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-500">
-              No tasks yet
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {tasks.slice(0, 10).map((task) => (
-                <TaskCard key={task.id} task={task} agents={agents} />
-              ))}
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

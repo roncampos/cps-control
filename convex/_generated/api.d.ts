@@ -8,9 +8,17 @@
  * @module
  */
 
+import type * as activityFunctions from "../activityFunctions.js";
+import type * as agentMutations from "../agentMutations.js";
+import type * as agentQueries from "../agentQueries.js";
+import type * as checkpointFunctions from "../checkpointFunctions.js";
+import type * as deliverableFunctions from "../deliverableFunctions.js";
 import type * as http from "../http.js";
+import type * as messageMutationsV2 from "../messageMutationsV2.js";
 import type * as mutations from "../mutations.js";
+import type * as notificationFunctions from "../notificationFunctions.js";
 import type * as queries from "../queries.js";
+import type * as taskMutationsV2 from "../taskMutationsV2.js";
 
 import type {
   ApiFromModules,
@@ -19,9 +27,17 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  activityFunctions: typeof activityFunctions;
+  agentMutations: typeof agentMutations;
+  agentQueries: typeof agentQueries;
+  checkpointFunctions: typeof checkpointFunctions;
+  deliverableFunctions: typeof deliverableFunctions;
   http: typeof http;
+  messageMutationsV2: typeof messageMutationsV2;
   mutations: typeof mutations;
+  notificationFunctions: typeof notificationFunctions;
   queries: typeof queries;
+  taskMutationsV2: typeof taskMutationsV2;
 }>;
 
 /**

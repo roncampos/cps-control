@@ -268,23 +268,30 @@ export default defineSchema({
   // AGENT COORDINATION LAYER
   // ==========================================
 
-  // Tasks - shared task queue with @mentions
+  // Tasks - shared task queue with @mentions (v2 fields added as optional)
   tasks: defineTable({
     title: v.string(),
     description: v.optional(v.string()),
-    assignedTo: v.string(), // agent name or person
+    assignedTo: v.string(), // agent name or person (v1 compat)
     createdBy: v.string(),
     status: v.union(
       v.literal("pending"),
       v.literal("in_progress"),
       v.literal("blocked"),
-      v.literal("complete")
+      v.literal("complete"),
+      // v2 statuses
+      v.literal("inbox"),
+      v.literal("assigned"),
+      v.literal("review"),
+      v.literal("done"),
     ),
     priority: v.union(
       v.literal("urgent"),
       v.literal("high"),
       v.literal("medium"),
-      v.literal("low")
+      v.literal("low"),
+      // v2 priority
+      v.literal("critical"),
     ),
     dueDate: v.optional(v.number()),
     createdAt: v.number(),
@@ -293,13 +300,28 @@ export default defineSchema({
     relatedIssueId: v.optional(v.id("issues")),
     relatedPropertyId: v.optional(v.id("properties")),
     tags: v.array(v.string()),
+    // v2 fields
+    type: v.optional(v.union(
+      v.literal("monitor"),
+      v.literal("analyze"),
+      v.literal("report"),
+      v.literal("bug"),
+      v.literal("feature"),
+      v.literal("doc_suggestion"),
+      v.literal("review"),
+    )),
+    assigneeIds: v.optional(v.array(v.string())), // v2 multi-assignee (agent names)
+    updatedAt: v.optional(v.number()),
+    dependsOn: v.optional(v.array(v.id("tasks"))),
+    blocks: v.optional(v.array(v.id("tasks"))),
+    context: v.optional(v.any()), // free-form JSON for task-specific data
   })
     .index("by_assignedTo", ["assignedTo"])
     .index("by_status", ["status"])
     .index("by_priority", ["priority"])
     .index("by_createdAt", ["createdAt"]),
 
-  // Messages - agent-to-agent and agent-to-human comms
+  // Messages - agent-to-agent and agent-to-human comms (v2 fields added as optional)
   messages: defineTable({
     from: v.string(),
     to: v.string(),
@@ -308,12 +330,16 @@ export default defineSchema({
     threadId: v.optional(v.string()),
     read: v.boolean(),
     createdAt: v.number(),
+    // v2 fields
+    taskId: v.optional(v.id("tasks")), // link to task (for comments)
+    mentions: v.optional(v.array(v.string())), // @mentioned agent names
   })
     .index("by_to", ["to"])
     .index("by_channel", ["channel"])
-    .index("by_createdAt", ["createdAt"]),
+    .index("by_createdAt", ["createdAt"])
+    .index("by_taskId", ["taskId"]),
 
-  // Activities - activity feed (like Mission Control)
+  // Activities - activity feed (v2 fields added as optional)
   activities: defineTable({
     actor: v.string(), // agent or person name
     action: v.string(), // "updated_rock", "flagged_issue", "closed_deal", etc.
@@ -321,6 +347,20 @@ export default defineSchema({
     entityType: v.optional(v.string()), // "rock", "scorecard", "lead", "property"
     entityId: v.optional(v.string()),
     createdAt: v.number(),
+    // v2 fields
+    activityType: v.optional(v.union(
+      v.literal("task_created"),
+      v.literal("task_assigned"),
+      v.literal("task_status_changed"),
+      v.literal("message_sent"),
+      v.literal("document_created"),
+      v.literal("bug_filed"),
+      v.literal("fix_deployed"),
+      v.literal("agent_heartbeat"),
+    )),
+    agentId: v.optional(v.string()), // agent name or ID
+    taskId: v.optional(v.id("tasks")),
+    metadata: v.optional(v.any()),
   })
     .index("by_actor", ["actor"])
     .index("by_createdAt", ["createdAt"]),
@@ -335,4 +375,88 @@ export default defineSchema({
     relatedIssueId: v.optional(v.id("issues")),
     impact: v.optional(v.string()),
   }).index("by_madeAt", ["madeAt"]),
+
+  // ==========================================
+  // MISSION CONTROL V2 — NEW TABLES
+  // ==========================================
+
+  // Agent roster — tracks all autonomous agents
+  agents: defineTable({
+    name: v.string(),                    // "Deal Analyst"
+    role: v.string(),                    // "Intelligence Officer"
+    sessionKey: v.string(),              // "agent:deal-analyst:main"
+    status: v.union(
+      v.literal("idle"),
+      v.literal("working"),
+      v.literal("blocked"),
+    ),
+    currentTaskId: v.optional(v.id("tasks")),
+    lastHeartbeat: v.number(),           // Unix timestamp
+    specialty: v.string(),               // "Pattern detection, bottleneck analysis"
+    avatar: v.optional(v.string()),      // Emoji
+    level: v.union(
+      v.literal("intern"),
+      v.literal("specialist"),
+      v.literal("lead"),
+    ),
+  }).index("by_session_key", ["sessionKey"]),
+
+  // Notifications — @mention delivery queue
+  notifications: defineTable({
+    mentionedAgentId: v.id("agents"),
+    content: v.string(),
+    taskId: v.optional(v.id("tasks")),
+    messageId: v.optional(v.id("messages")),
+    delivered: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_agent", ["mentionedAgentId"])
+    .index("by_delivered", ["delivered"]),
+
+  // Thread subscriptions — who's following which task threads
+  threadSubscriptions: defineTable({
+    taskId: v.id("tasks"),
+    agentId: v.id("agents"),
+    subscribedAt: v.number(),
+  })
+    .index("by_task", ["taskId"])
+    .index("by_agent", ["agentId"]),
+
+  // Deliverables — what agents produce per task
+  deliverables: defineTable({
+    taskId: v.id("tasks"),
+    type: v.union(
+      v.literal("code"),
+      v.literal("documentation"),
+      v.literal("analysis"),
+      v.literal("data"),
+      v.literal("design"),
+    ),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("review"),
+      v.literal("approved"),
+      v.literal("deployed"),
+    ),
+    path: v.string(),                     // File path or URL
+    description: v.string(),
+    createdBy: v.id("agents"),
+    createdAt: v.number(),
+    metadata: v.optional(v.any()),
+  })
+    .index("by_task", ["taskId"])
+    .index("by_type", ["type"])
+    .index("by_status", ["status"]),
+
+  // Checkpoints — crash-recovery state snapshots
+  checkpoints: defineTable({
+    taskId: v.id("tasks"),
+    agentId: v.id("agents"),
+    state: v.any(),                       // JSON, sanitized of secrets
+    resumable: v.boolean(),
+    createdAt: v.number(),
+    expiresAt: v.number(),                // Auto-expire after 24h
+  })
+    .index("by_task", ["taskId"])
+    .index("by_agent", ["agentId"]),
 });

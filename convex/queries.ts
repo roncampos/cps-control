@@ -175,6 +175,58 @@ export const getRecentActivities = query({
 });
 
 // ==========================================
+// V2 QUERIES — MISSION CONTROL AGENTS
+// ==========================================
+
+export const listAgents = query({
+  handler: async (ctx) => {
+    return await ctx.db.query("agents").collect();
+  },
+});
+
+export const listBugs = query({
+  handler: async (ctx) => {
+    const tasks = await ctx.db.query("tasks").order("desc").collect();
+    return tasks.filter((t) => t.type === "bug");
+  },
+});
+
+export const getAgentWorkQueue = query({
+  args: { assignedTo: v.string() },
+  handler: async (ctx, args) => {
+    const tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_assignedTo", (q) => q.eq("assignedTo", args.assignedTo))
+      .order("desc")
+      .collect();
+    return tasks.filter((t) =>
+      t.status !== "complete" && t.status !== "done"
+    );
+  },
+});
+
+export const getTaskComments = query({
+  args: { taskId: v.id("tasks") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("messages")
+      .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
+      .order("asc")
+      .collect();
+  },
+});
+
+export const getTaskDeliverables = query({
+  args: { taskId: v.id("tasks") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("deliverables")
+      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
+      .collect();
+  },
+});
+
+// ==========================================
 // DASHBOARD SUMMARY
 // ==========================================
 
