@@ -111,3 +111,21 @@ export const getCreatedSince = query({
       .then((msgs) => msgs.filter((m) => m.createdAt >= args.since));
   },
 });
+
+export const sendDirectMessage = mutation({
+  args: {
+    from: v.string(),
+    to: v.string(),
+    content: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("messages", {
+      from: args.from,
+      to: args.to,
+      content: args.content,
+      channel: "console",
+      read: false,
+      createdAt: Date.now(),
+    });
+  },
+});

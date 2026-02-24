@@ -226,6 +226,29 @@ export const getTaskDeliverables = query({
   },
 });
 
+export const getDirectMessages = query({
+  args: {
+    agent: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 50;
+    const msgs = await ctx.db
+      .query("messages")
+      .withIndex("by_createdAt")
+      .order("desc")
+      .take(limit * 3); // overfetch to compensate for filtering
+    return msgs
+      .filter(
+        (m) =>
+          (m.from === args.agent || m.to === args.agent) &&
+          m.channel === "console"
+      )
+      .slice(0, limit)
+      .reverse();
+  },
+});
+
 // ==========================================
 // DASHBOARD SUMMARY
 // ==========================================
