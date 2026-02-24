@@ -226,6 +226,20 @@ export const getTaskDeliverables = query({
   },
 });
 
+export const getRecentComments = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 50;
+    const msgs = await ctx.db
+      .query("messages")
+      .withIndex("by_createdAt")
+      .order("desc")
+      .take(limit * 2);
+    // Only return messages that are task comments (have taskId)
+    return msgs.filter((m) => m.taskId != null).slice(0, limit);
+  },
+});
+
 export const getDirectMessages = query({
   args: {
     agent: v.string(),

@@ -959,22 +959,69 @@ function MCPage() {
   const boardTasks = convexTasks.map(t => ({
     id: t._id,
     title: t.title,
+    description: t.description || "",
     status: mapConvexTaskStatus(t.status),
     assignees: t.assignedTo ? [t.assignedTo] : [],
     priority: t.priority === "urgent" ? "critical" : t.priority,
     tags: t.tags || [],
+    createdAt: t.createdAt,
+    type: t.type || null,
   }));
 
   const displayTasks = boardTasks;
 
-  // Map Convex activities to display format
-  const displayActivity = convexActivities.map(a => ({
-    id: a._id,
-    agentName: a.actor,
-    type: a.activityType || a.action,
-    message: a.description || a.action,
-    timestamp: a.createdAt,
-  }));
+  // Recent comments for live feed
+  const recentComments = useQuery(api.queries.getRecentComments, { limit: 50 }) ?? [];
+
+  // Merge activities + comments into unified feed
+  type FeedItem = { id: string; agentName: string; type: string; message: string; timestamp: number; taskTitle?: string };
+  const feedItems: FeedItem[] = [
+    ...convexActivities.map(a => ({
+      id: a._id,
+      agentName: a.actor,
+      type: a.activityType || a.action,
+      message: a.description || a.action,
+      timestamp: a.createdAt,
+    })),
+    ...recentComments.map(c => {
+      const task = convexTasks.find(t => t._id === c.taskId);
+      return {
+        id: c._id,
+        agentName: c.from,
+        type: "comment",
+        message: c.content,
+        timestamp: c.createdAt,
+        taskTitle: task?.title,
+      };
+    }),
+  ].sort((a, b) => b.timestamp - a.timestamp);
+
+  // Feed filter state
+  const [feedFilter, setFeedFilter] = useState<"all" | "tasks" | "comments" | "status">("all");
+  const [feedAgentFilter, setFeedAgentFilter] = useState<string | null>(null);
+
+  const filteredFeed = feedItems.filter(item => {
+    if (feedFilter === "comments" && item.type !== "comment") return false;
+    if (feedFilter === "tasks" && !["task_created", "task_assigned", "task_status_changed", "task_started", "task_completed"].includes(item.type)) return false;
+    if (feedFilter === "status" && !["agent_heartbeat", "task_status_changed"].includes(item.type)) return false;
+    if (feedAgentFilter && item.agentName !== feedAgentFilter) return false;
+    return true;
+  });
+
+  // Compute per-agent feed counts
+  const agentFeedCounts: Record<string, number> = {};
+  feedItems.forEach(item => {
+    agentFeedCounts[item.agentName] = (agentFeedCounts[item.agentName] || 0) + 1;
+  });
+  const feedCounts = {
+    all: feedItems.length,
+    tasks: feedItems.filter(i => ["task_created", "task_assigned", "task_status_changed", "task_started", "task_completed"].includes(i.type)).length,
+    comments: feedItems.filter(i => i.type === "comment").length,
+    status: feedItems.filter(i => ["agent_heartbeat", "task_status_changed"].includes(i.type)).length,
+  };
+
+  // Map Convex activities to display format (kept for backward compat)
+  const displayActivity = feedItems;
 
   const actIcons: Record<string, string> = {
     task_created: "📝", task_assigned: "👤", task_status_changed: "🔄",
@@ -1000,59 +1047,69 @@ function MCPage() {
         width: 220, flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.06)",
         display: "flex", flexDirection: "column", overflow: "hidden"
       }}>
-        <div style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.04)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 10, fontFamily: V.m, color: "#5a5047", letterSpacing: 1 }}>AGENTS</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#10B981", animation: "breathe 2s infinite" }} />
-            <span style={{ fontSize: 10, color: "#10B981", fontFamily: V.m }}>
-              {activeAgents.filter(a => a.status === "active").length}
-            </span>
+        <div style={{ padding: "10px 14px", borderBottom: "1px solid rgba(255,255,255,0.04)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981" }} />
+            <span style={{ fontSize: 10, fontFamily: V.m, color: "#8a8078", letterSpacing: 1, fontWeight: 600 }}>AGENTS</span>
+            <span style={{ fontSize: 10, color: "#4a4540", fontFamily: V.m, background: "rgba(255,255,255,0.05)", padding: "1px 6px", borderRadius: 4 }}>{activeAgents.length}</span>
           </div>
         </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: "6px 8px" }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "4px 6px" }}>
           {activeAgents.map((a) => {
             const t = displayTasks.find(x => x.id === a.task);
-            const hbColor = a.hb < 5 ? "#10B981" : a.hb < 15 ? "#F59E0B" : "#EF4444";
             const levelBadge = a.level === "lead" ? "LEAD" : a.level === "specialist" ? "SPC" : "INT";
+            const statusColor = a.status === "active" ? "#10B981" : a.status === "blocked" ? "#EF4444" : "#6b6055";
+            const statusLabel = a.status === "active" ? "WORKING" : a.status === "blocked" ? "BLOCKED" : "IDLE";
             return (
               <div
                 key={a.id}
                 onClick={() => setSelAgent(a)}
                 style={{
-                  padding: "8px 10px", borderRadius: 10, cursor: "pointer",
-                  marginBottom: 2, transition: "all 0.15s",
-                  borderLeft: `2px solid ${a.color}25`,
+                  padding: "10px 10px", borderRadius: 10, cursor: "pointer",
+                  marginBottom: 1, transition: "all 0.15s",
+                  borderBottom: "1px solid rgba(255,255,255,0.03)",
                 }}
                 onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
                 onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{
-                    width: 28, height: 28, borderRadius: 9,
+                    width: 30, height: 30, borderRadius: 10,
                     background: `linear-gradient(135deg, ${a.color}20, ${a.color}40)`,
-                    border: `1px solid ${a.color}25`, display: "flex", alignItems: "center",
-                    justifyContent: "center", fontSize: 13, flexShrink: 0, position: "relative"
+                    border: `1px solid ${a.color}20`, display: "flex", alignItems: "center",
+                    justifyContent: "center", fontSize: 14, flexShrink: 0
                   }}>
                     {a.emoji}
-                    <div style={{
-                      position: "absolute", bottom: -1, right: -1, width: 6, height: 6, borderRadius: "50%",
-                      background: a.status === "active" ? "#10B981" : a.status === "blocked" ? "#EF4444" : "#4a4540",
-                      border: "1.5px solid #16140f"
-                    }} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "#e8ddd0", fontFamily: V.d }}>{a.name}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 1 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "#f0ebe3" }}>{a.name}</span>
                       <span style={{
                         fontSize: 7, padding: "1px 4px", borderRadius: 3,
-                        background: `${a.color}15`, color: a.color, fontFamily: V.m, fontWeight: 600, letterSpacing: 0.5
+                        background: `${a.color}15`, color: a.color, fontFamily: V.m, fontWeight: 700, letterSpacing: 0.5
                       }}>{levelBadge}</span>
                     </div>
-                    <div style={{ fontSize: 10, color: "#4a4540", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {t ? t.title.slice(0, 35) : a.role}
-                    </div>
+                    <div style={{ fontSize: 10, color: "#5a5047" }}>{a.role}</div>
                   </div>
-                  <span style={{ fontSize: 9, color: hbColor, fontFamily: V.m, flexShrink: 0 }}>♡ {a.hb}m</span>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, flexShrink: 0 }}>
+                    <span style={{
+                      fontSize: 8, fontFamily: V.m, fontWeight: 700, letterSpacing: 0.5, color: statusColor,
+                      display: "flex", alignItems: "center", gap: 3,
+                    }}>
+                      <span style={{ width: 5, height: 5, borderRadius: "50%", background: statusColor }} />
+                      {statusLabel}
+                    </span>
+                  </div>
+                </div>
+                {/* Current task snippet */}
+                {t && (
+                  <div style={{ fontSize: 10, color: "#6b6055", marginTop: 4, marginLeft: 38, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {t.title.slice(0, 40)}{t.title.length > 40 ? "..." : ""}
+                  </div>
+                )}
+                {/* Time since heartbeat */}
+                <div style={{ fontSize: 9, color: "#3a3530", marginTop: 2, marginLeft: 38, fontFamily: V.m }}>
+                  {a.hb < 1 ? "just now" : a.hb < 60 ? `about ${a.hb}m ago` : `about ${Math.floor(a.hb / 60)}h ago`}
                 </div>
               </div>
             );
@@ -1063,17 +1120,27 @@ function MCPage() {
       {/* ═══ CENTER PANEL: MISSION QUEUE ═══ */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {/* Center header */}
-        <div style={{ padding: "8px 14px", borderBottom: "1px solid rgba(255,255,255,0.04)", display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ padding: "8px 14px", borderBottom: "1px solid rgba(255,255,255,0.04)", display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#F59E0B" }} />
+            <span style={{ fontSize: 10, fontFamily: V.m, color: "#8a8078", letterSpacing: 1, fontWeight: 600 }}>MISSION QUEUE</span>
+          </div>
           <div style={{ display: "flex", gap: 3 }}>
             {(["board", "list", "approvals"] as const).map(v => (
-              <Btn key={v} active={centerView === v} onClick={() => setCenterView(v)} style={{ fontSize: 11, padding: "4px 10px" }}>
+              <Btn key={v} active={centerView === v} onClick={() => setCenterView(v)} style={{ fontSize: 10, padding: "3px 10px" }}>
                 {v === "board" ? "⊞ Board" : v === "list" ? "☰ List" : `✓ Approvals${pendingApprovals.length > 0 ? ` (${pendingApprovals.length})` : ""}`}
               </Btn>
             ))}
           </div>
-          <div style={{ marginLeft: "auto" }}>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 9, color: "#5a5047", fontFamily: V.m }}>
+              {activeAgents.filter(a => a.status === "active").length} active
+            </span>
+            <span style={{ fontSize: 9, color: "#5a5047", fontFamily: V.m }}>
+              {displayTasks.length} tasks
+            </span>
             <button onClick={() => setShowNewTask(true)} style={{
-              padding: "5px 14px", borderRadius: 8, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer",
+              padding: "5px 14px", borderRadius: 8, border: "none", fontSize: 11, fontWeight: 600, cursor: "pointer",
               background: "linear-gradient(135deg, #F59E0B, #EF4444)", color: "#16140f", fontFamily: V.m,
             }}>+ New Task</button>
           </div>
@@ -1103,32 +1170,42 @@ function MCPage() {
                           onClick={() => setSelTaskId(t.id as Id<"tasks">)}
                           onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, taskId: t.id as Id<"tasks"> }); }}
                           style={{
-                            padding: "10px 12px", borderRadius: 10, cursor: "pointer",
+                            padding: "12px 14px", borderRadius: 10, cursor: "pointer",
                             background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)",
                             transition: "all 0.15s", position: "relative",
                           }}
                           onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.045)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; }}
                           onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.025)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)"; }}
                         >
-                          <div style={{ display: "flex", justifyContent: "space-between", gap: 6, marginBottom: 5 }}>
-                            <span style={{ fontSize: 12, fontWeight: 500, color: "#f0ebe3", lineHeight: 1.3, flex: 1 }}>{t.title}</span>
-                            <span style={{
-                              fontSize: 7, padding: "2px 5px", borderRadius: 4, flexShrink: 0,
-                              background: `${PRI[t.priority]?.c || "#6b6055"}12`, color: PRI[t.priority]?.c || "#6b6055", fontFamily: V.m
-                            }}>{PRI[t.priority]?.l || "---"}</span>
+                          {/* Priority indicator + title */}
+                          <div style={{ display: "flex", gap: 6, marginBottom: 4 }}>
+                            <span style={{ color: PRI[t.priority]?.c || "#6b6055", fontSize: 11, flexShrink: 0 }}>↑</span>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: "#f0ebe3", lineHeight: 1.3, flex: 1 }}>{t.title}</span>
                           </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <div style={{ display: "flex", gap: 3 }}>
-                              {t.tags.slice(0, 2).map(tg => (
-                                <span key={tg} style={{ fontSize: 8, padding: "1px 5px", borderRadius: 10, background: "rgba(255,255,255,0.04)", color: "#5a5047", fontFamily: V.m }}>{tg}</span>
+                          {/* Description snippet */}
+                          {t.description && (
+                            <p style={{ fontSize: 11, color: "#6b6055", margin: "0 0 8px 17px", lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as any, overflow: "hidden" }}>
+                              {t.description.slice(0, 100)}{t.description.length > 100 ? "..." : ""}
+                            </p>
+                          )}
+                          {/* Agent + time */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, marginLeft: 17 }}>
+                            {t.assignees[0] && (
+                              <>
+                                <AgentAv id={t.assignees[0]} size={16} />
+                                <span style={{ fontSize: 10, color: "#8a8078" }}>{t.assignees[0]}</span>
+                              </>
+                            )}
+                            <span style={{ fontSize: 9, color: "#3a3530", fontFamily: V.m, marginLeft: "auto" }}>{timeAgo(t.createdAt)}</span>
+                          </div>
+                          {/* Tags */}
+                          {t.tags.length > 0 && (
+                            <div style={{ display: "flex", gap: 4, marginLeft: 17, flexWrap: "wrap" }}>
+                              {t.tags.slice(0, 3).map(tg => (
+                                <span key={tg} style={{ fontSize: 9, padding: "2px 7px", borderRadius: 4, background: "rgba(255,255,255,0.04)", color: "#5a5047", fontFamily: V.m }}>{tg}</span>
                               ))}
                             </div>
-                            <div style={{ display: "flex" }}>
-                              {t.assignees.map((a, i) => (
-                                <div key={a} style={{ marginLeft: i ? -4 : 0 }}><AgentAv id={a} size={16} /></div>
-                              ))}
-                            </div>
-                          </div>
+                          )}
                         </div>
                       ))}
                       {ct.length === 0 && (
@@ -1223,32 +1300,96 @@ function MCPage() {
 
       {/* ═══ RIGHT PANEL: LIVE FEED ═══ */}
       <div style={{
-        width: 280, flexShrink: 0, borderLeft: "1px solid rgba(255,255,255,0.06)",
+        width: 320, flexShrink: 0, borderLeft: "1px solid rgba(255,255,255,0.06)",
         display: "flex", flexDirection: "column", overflow: "hidden"
       }}>
-        <div style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.04)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 10, fontFamily: V.m, color: "#5a5047", letterSpacing: 1 }}>LIVE FEED</span>
-          <span style={{ fontSize: 9, color: "#3a3530", fontFamily: V.m }}>{displayActivity.length} events</span>
+        {/* Feed header */}
+        <div style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#F59E0B", animation: "breathe 2s infinite" }} />
+            <span style={{ fontSize: 10, fontFamily: V.m, color: "#8a8078", letterSpacing: 1, fontWeight: 600 }}>LIVE FEED</span>
+          </div>
+          {/* Filter tabs */}
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
+            {([
+              { k: "all" as const, l: "All", c: feedCounts.all },
+              { k: "tasks" as const, l: "Tasks", c: feedCounts.tasks },
+              { k: "comments" as const, l: "Comments", c: feedCounts.comments },
+              { k: "status" as const, l: "Status", c: feedCounts.status },
+            ]).map(f => (
+              <button key={f.k} onClick={() => setFeedFilter(f.k)} style={{
+                padding: "3px 8px", borderRadius: 5, fontSize: 9, fontFamily: V.m, cursor: "pointer",
+                background: feedFilter === f.k ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.03)",
+                color: feedFilter === f.k ? "#F59E0B" : "#5a5047",
+                border: `1px solid ${feedFilter === f.k ? "rgba(245,158,11,0.25)" : "rgba(255,255,255,0.04)"}`,
+              }}>{f.l} {f.c}</button>
+            ))}
+          </div>
+          {/* Agent pills */}
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            <button onClick={() => setFeedAgentFilter(null)} style={{
+              padding: "2px 8px", borderRadius: 12, fontSize: 9, fontFamily: V.m, cursor: "pointer",
+              background: feedAgentFilter === null ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.03)",
+              color: feedAgentFilter === null ? "#F59E0B" : "#5a5047",
+              border: `1px solid ${feedAgentFilter === null ? "rgba(245,158,11,0.2)" : "rgba(255,255,255,0.04)"}`,
+            }}>All Agents</button>
+            {activeAgents.map(a => {
+              const count = agentFeedCounts[a.name] || 0;
+              return (
+                <button key={a.id} onClick={() => setFeedAgentFilter(feedAgentFilter === a.name ? null : a.name)} style={{
+                  padding: "2px 8px", borderRadius: 12, fontSize: 9, fontFamily: V.m, cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 4,
+                  background: feedAgentFilter === a.name ? `${a.color}15` : "rgba(255,255,255,0.03)",
+                  color: feedAgentFilter === a.name ? a.color : "#5a5047",
+                  border: `1px solid ${feedAgentFilter === a.name ? a.color + "25" : "rgba(255,255,255,0.04)"}`,
+                }}>
+                  <span style={{ fontSize: 8 }}>{a.emoji}</span>
+                  {a.name.split(" ")[0]} {count}
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: "6px 8px" }}>
-          {displayActivity.length === 0 && (
+        {/* Feed entries */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "4px 8px" }}>
+          {filteredFeed.length === 0 && (
             <div style={{ padding: 30, textAlign: "center", color: "#3a3530", fontStyle: "italic", fontSize: 11 }}>
-              No activity yet. Events will appear as agents work.
+              No activity yet.
             </div>
           )}
-          {displayActivity.map((act, i) => {
-            const aStyle = agentAvatarStyle[act.agentName];
+          {filteredFeed.slice(0, 100).map((item, i) => {
+            const aStyle = agentAvatarStyle[item.agentName];
+            const isComment = item.type === "comment";
             return (
-              <div key={act.id} style={{
+              <div key={item.id + i} style={{
                 padding: "8px 8px", borderBottom: "1px solid rgba(255,255,255,0.025)",
-                animation: i < 5 ? `fadeSlideIn 0.3s ease ${i * 0.05}s both` : undefined
+                animation: i < 5 ? `fadeSlideIn 0.2s ease ${i * 0.03}s both` : undefined,
+                cursor: isComment && item.taskTitle ? "pointer" : "default",
               }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                  <span style={{ fontSize: 12 }}>{actIcons[act.type] || "📋"}</span>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: aStyle?.color || "#F59E0B" }}>{act.agentName}</span>
-                  <span style={{ fontSize: 9, color: "#3a3530", fontFamily: V.m, marginLeft: "auto" }}>{timeAgo(act.timestamp)}</span>
-                </div>
-                <p style={{ fontSize: 11, color: "#6b6055", margin: "0 0 0 18px", lineHeight: 1.4 }}>{act.message}</p>
+                {isComment ? (
+                  <>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
+                      <span style={{ color: "#F59E0B", fontSize: 8 }}>◆</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: aStyle?.color || "#F59E0B" }}>{item.agentName}</span>
+                      <span style={{ fontSize: 10, color: "#5a5047" }}>commented on</span>
+                    </div>
+                    {item.taskTitle && (
+                      <div style={{ fontSize: 11, color: "#c4b8a8", margin: "0 0 2px 13px", fontWeight: 500 }}>
+                        &ldquo;{item.taskTitle}&rdquo; &rsaquo;
+                      </div>
+                    )}
+                    <div style={{ fontSize: 9, color: "#3a3530", fontFamily: V.m, marginLeft: 13 }}>{item.agentName} {timeAgo(item.timestamp)}</div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
+                      <span style={{ fontSize: 11 }}>{actIcons[item.type] || "📋"}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: aStyle?.color || "#F59E0B" }}>{item.agentName}</span>
+                      <span style={{ fontSize: 9, color: "#3a3530", fontFamily: V.m, marginLeft: "auto" }}>{timeAgo(item.timestamp)}</span>
+                    </div>
+                    <p style={{ fontSize: 10, color: "#5a5047", margin: "0 0 0 16px", lineHeight: 1.4 }}>{item.message}</p>
+                  </>
+                )}
               </div>
             );
           })}
@@ -1283,20 +1424,19 @@ function MCPage() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// MAIN APP
+// MAIN APP — No sidebar, just top bar + MCPage
 // ═══════════════════════════════════════════════════════════════
 
 export default function App() {
-  const [col, setCol] = useState(false);
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 60000);
+    const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
   return (
-    <div style={{ width: "100%", height: "100vh", background: "#16140f", color: "#e8ddd0", display: "flex", overflow: "hidden" }}>
+    <div style={{ width: "100%", height: "100vh", background: "#16140f", color: "#e8ddd0", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,400&family=Instrument+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Instrument Sans', sans-serif; }
@@ -1308,82 +1448,53 @@ export default function App() {
         @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
         @keyframes breathe { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
         input::placeholder { color: #4a4540; }
+        select option { background: #1e1b16; color: #e8ddd0; }
       `}</style>
 
-      {/* SIDEBAR */}
-      <div
-        style={{
-          width: col ? 54 : 210,
-          flexShrink: 0,
-          borderRight: "1px solid rgba(255,255,255,0.06)",
-          display: "flex",
-          flexDirection: "column",
-          transition: "width 0.3s cubic-bezier(0.16,1,0.3,1)",
-          background: "rgba(255,255,255,0.008)",
-          overflow: "hidden"
-        }}
-      >
-        <div style={{ padding: col ? "13px 9px" : "13px 14px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", gap: 9, flexShrink: 0 }}>
-          <div
-            onClick={() => setCol(!col)}
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 9,
-              background: "linear-gradient(135deg, #F59E0B18, #EF444418)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              flexShrink: 0,
-              border: "1px solid rgba(245,158,11,0.12)",
-              fontSize: 13
-            }}
-          >
-            ⚡
-          </div>
-          {!col && (
-            <div>
-              <div style={{ fontFamily: V.d, fontSize: 13, fontWeight: 700, color: "#f0ebe3", lineHeight: 1 }}>CPS Control</div>
-              <div style={{ fontSize: 8, color: "#4a4540", fontFamily: V.m }}>Campos Property Solutions</div>
-            </div>
-          )}
+      {/* TOP BAR — SiteGPT style */}
+      <div style={{
+        padding: "10px 24px", borderBottom: "1px solid rgba(255,255,255,0.08)",
+        display: "flex", alignItems: "center", gap: 20, flexShrink: 0,
+        background: "rgba(255,255,255,0.01)"
+      }}>
+        {/* Brand */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 16 }}>◇</span>
+          <span style={{ fontFamily: V.m, fontSize: 14, fontWeight: 600, color: "#f0ebe3", letterSpacing: 2 }}>MISSION CONTROL</span>
+          <span style={{
+            fontSize: 9, padding: "3px 8px", borderRadius: 4,
+            background: "rgba(255,255,255,0.05)", color: "#6b6055", fontFamily: V.m, letterSpacing: 0.5
+          }}>CPS</span>
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto", padding: col ? "8px 5px" : "8px 7px" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 9,
-              padding: col ? "9px 6px" : "9px 11px",
-              borderRadius: 8,
-              background: "rgba(245,158,11,0.08)",
-              color: "#F59E0B",
-              fontWeight: 600,
-              justifyContent: col ? "center" : "flex-start",
-              marginBottom: 2
-            }}
-          >
-            <span style={{ fontSize: 14, width: 20, textAlign: "center", flexShrink: 0 }}>🎛</span>
-            {!col && <span style={{ fontSize: 13 }}>Mission Control</span>}
-            {!col && <span style={{ marginLeft: "auto", width: 6, height: 6, borderRadius: "50%", background: "#10B981", animation: "breathe 2s infinite" }} />}
+        <div style={{ flex: 1 }} />
+
+        {/* Clock */}
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#f0ebe3", fontFamily: V.m, letterSpacing: 1 }}>
+            {now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
+          </div>
+          <div style={{ fontSize: 9, color: "#4a4540", fontFamily: V.m, letterSpacing: 1 }}>
+            {now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).toUpperCase()}
           </div>
         </div>
 
-        {!col && <div style={{ padding: "10px 14px", borderTop: "1px solid rgba(255,255,255,0.04)", flexShrink: 0, fontSize: 10, color: "#3a3530", fontFamily: V.m }}>Q1 2026 · Wk 06</div>}
+        <div style={{ flex: 1 }} />
+
+        {/* Online indicator */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 6,
+          padding: "4px 12px", borderRadius: 6,
+          border: "1px solid rgba(16,185,129,0.2)"
+        }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981", animation: "breathe 2s infinite" }} />
+          <span style={{ fontSize: 10, color: "#10B981", fontFamily: V.m, fontWeight: 600, letterSpacing: 1 }}>ONLINE</span>
+        </div>
       </div>
 
-      {/* MAIN */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
-        <div style={{ padding: "11px 22px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, background: "rgba(255,255,255,0.005)" }}>
-          <h1 style={{ fontFamily: V.d, fontSize: 19, fontWeight: 600, color: "#f0ebe3" }}>Mission Control</h1>
-          <div style={{ fontSize: 11, color: "#3a3530", fontFamily: V.m }}>{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
-        </div>
-
-        <div style={{ flex: 1, overflow: "hidden" }}>
-          <MCPage />
-        </div>
+      {/* MAIN CONTENT */}
+      <div style={{ flex: 1, overflow: "hidden" }}>
+        <MCPage />
       </div>
     </div>
   );
