@@ -362,6 +362,76 @@ http.route({
   }),
 });
 
+// ==========================================
+// ORCHESTRATOR REASONING ENDPOINTS
+// ==========================================
+
+// POST /activities/orchestrator-reasoning — log orchestrator reasoning
+http.route({
+  path: "/activities/orchestrator-reasoning",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const authError = checkAuth(request);
+    if (authError) return authError;
+
+    const body = await request.json() as any;
+    const { taskId, assignedTo, reasoning, alternativesConsidered, tieBreaker } = body;
+
+    if (!taskId || !assignedTo || !reasoning || !alternativesConsidered) {
+      return new Response(
+        JSON.stringify({ error: "taskId, assignedTo, reasoning, and alternativesConsidered are required" }),
+        { status: 400, headers: JSON_HEADERS }
+      );
+    }
+
+    // Resolve taskId: if it looks like a Convex ID use it directly, otherwise look up by title
+    let resolvedTaskId: string | undefined;
+    if (typeof taskId === "string" && taskId.includes(":")) {
+      // Likely a raw Convex ID (e.g. "tasks:abc123...")
+      resolvedTaskId = taskId;
+    } else {
+      // Look up by title
+      const tasks = await ctx.runQuery(api.queries.listTasks, {});
+      const matched = tasks.find((t: any) => t.title === taskId);
+      resolvedTaskId = matched?._id;
+    }
+
+    const activityId = await ctx.runMutation(api.activityFunctions.logTyped, {
+      actor: "Nuq",
+      action: "orchestrator_reasoning",
+      description: reasoning,
+      activityType: "orchestrator_reasoning",
+      taskId: resolvedTaskId as any,
+      metadata: { assignedTo, alternativesConsidered, tieBreaker },
+    });
+
+    return new Response(JSON.stringify({ success: true, id: activityId }), {
+      headers: JSON_HEADERS,
+    });
+  }),
+});
+
+// GET /activities/orchestrator-reasoning — list recent orchestrator reasoning
+http.route({
+  path: "/activities/orchestrator-reasoning",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const authError = checkAuth(request);
+    if (authError) return authError;
+
+    const url = new URL(request.url);
+    const limit = Number(url.searchParams.get("limit") || "20");
+
+    const activities = await ctx.runQuery(api.activityFunctions.getOrchestratorReasoning, {
+      limit,
+    });
+
+    return new Response(JSON.stringify({ activities }), {
+      headers: JSON_HEADERS,
+    });
+  }),
+});
+
 // POST /agents/seed — one-time agent seeding
 http.route({
   path: "/agents/seed",

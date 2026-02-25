@@ -11,7 +11,8 @@ export const getRecentTyped = query({
       v.literal("document_created"),
       v.literal("bug_filed"),
       v.literal("fix_deployed"),
-      v.literal("agent_heartbeat")
+      v.literal("agent_heartbeat"),
+      v.literal("orchestrator_reasoning")
     )),
     limit: v.optional(v.number()),
   },
@@ -59,7 +60,8 @@ export const logTyped = mutation({
       v.literal("document_created"),
       v.literal("bug_filed"),
       v.literal("fix_deployed"),
-      v.literal("agent_heartbeat")
+      v.literal("agent_heartbeat"),
+      v.literal("orchestrator_reasoning")
     )),
     agentId: v.optional(v.string()),
     taskId: v.optional(v.id("tasks")),
@@ -70,5 +72,23 @@ export const logTyped = mutation({
       ...args,
       createdAt: Date.now(),
     });
+  },
+});
+
+export const getOrchestratorReasoning = query({
+  args: {
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 20;
+    const activities = await ctx.db
+      .query("activities")
+      .withIndex("by_createdAt")
+      .order("desc")
+      .take(limit * 3);
+
+    return activities
+      .filter((a) => a.activityType === "orchestrator_reasoning")
+      .slice(0, limit);
   },
 });
