@@ -357,6 +357,7 @@ export default defineSchema({
       v.literal("bug_filed"),
       v.literal("fix_deployed"),
       v.literal("agent_heartbeat"),
+      v.literal("orchestrator_reasoning"),
     )),
     agentId: v.optional(v.string()), // agent name or ID
     taskId: v.optional(v.id("tasks")),
