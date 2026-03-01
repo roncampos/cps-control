@@ -221,6 +221,14 @@ http.route({
       status: body.status,
     });
 
+    // Update assignedTo if provided
+    if (body.assignedTo) {
+      await ctx.runMutation(api.taskMutationsV2.reassign, {
+        id: body.id,
+        assignedTo: body.assignedTo,
+      });
+    }
+
     // Log activity
     await ctx.runMutation(api.activityFunctions.logTyped, {
       actor: body.actor || "api",

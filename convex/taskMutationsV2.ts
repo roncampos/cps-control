@@ -123,3 +123,14 @@ export const addDependencies = mutation({
     await ctx.db.patch(args.id, patch);
   },
 });
+
+export const reassign = mutation({
+  args: { id: v.id("tasks"), assignedTo: v.string() },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      assignedTo: args.assignedTo,
+      assigneeIds: [args.assignedTo],
+      updatedAt: Date.now(),
+    });
+  },
+});
